@@ -15,7 +15,7 @@ using namespace RAJA;
 #ifdef CUDA_CODE
 // typedef NestedPolicy<ExecList<cuda_threadblock_x_exec<4>,cuda_threadblock_y_exec<4>,
 // 			      cuda_threadblock_z_exec<16>>> EXEC;
-
+/*
 using EXEC= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<256,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_x_loop,
@@ -25,8 +25,21 @@ using EXEC= RAJA::KernelPolicy<
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_direct,
 														RAJA::statement::For<2, RAJA::cuda_thread_z_direct,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
+*/
+    using EXEC =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<4>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<16>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
 
-#define SYNC_DEVICE cudaDeviceSynchronize();
+#define SYNC_DEVICE// cudaDeviceSynchronize();
 #else
 
 using EXEC0=

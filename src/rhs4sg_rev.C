@@ -1,4 +1,5 @@
 #include "sw4.h"
+#include "sw4raja.h"
 using namespace std;
 #include <stdio.h>
 #ifdef RAJA03
@@ -18,7 +19,7 @@ using namespace RAJA;
 // 			      cuda_threadblock_x_exec<64>>>
 //   EXEC;
 
-using EXEC= RAJA::KernelPolicy<
+/*using EXEC= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<256,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<1>, RAJA::cuda_block_x_loop,
 			  RAJA::statement::Tile<1, RAJA::statement::tile_fixed<1>, RAJA::cuda_block_y_loop,
@@ -27,8 +28,73 @@ using EXEC= RAJA::KernelPolicy<
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_direct,
 														RAJA::statement::For<2, RAJA::cuda_thread_z_direct,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
+*/
+    using EXEC =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<4>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<16>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+
+
+    using BRIAN1 =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<64>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+    using BRIAN2 =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<64>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<4>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+
+    using BRIAN3 =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<64>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+
+/*
+  using EXEC =
+    RAJA::KernelPolicy<
+      RAJA::statement::For<0, RAJA::loop_exec,    // k
+        RAJA::statement::For<1, RAJA::loop_exec,  // j
+          RAJA::statement::For<2, RAJA::loop_exec,// i
+            RAJA::statement::Lambda<0>
+          >
+        >
+      >
+    >;
+
 // 1m 58s on Loh2 100
-using EXEC1_OLDE1= RAJA::KernelPolicy<
+/*using EXEC1_OLDE1= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<512,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<32>, RAJA::cuda_block_x_loop,
 			  RAJA::statement::Tile<1, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_y_loop,
@@ -67,9 +133,9 @@ using EXEC1_OLDE4= RAJA::KernelPolicy<
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_loop,
 														RAJA::statement::For<2, RAJA::cuda_thread_x_loop,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
-
+*/
 //1m 32
-using EXEC1= RAJA::KernelPolicy<
+/*using EXEC1= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<256,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_z_loop,
 			  RAJA::statement::Tile<1, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_y_loop,
@@ -78,6 +144,30 @@ using EXEC1= RAJA::KernelPolicy<
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_loop,
 														RAJA::statement::For<2, RAJA::cuda_thread_x_loop,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
+*/
+  /*  using EXEC1 =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<4>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<16>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+*/
+  using EXEC1 =
+    RAJA::KernelPolicy<
+      RAJA::statement::For<0, RAJA::loop_exec,    // k
+        RAJA::statement::For<1, RAJA::loop_exec,  // j
+          RAJA::statement::For<2, RAJA::loop_exec,// i
+            RAJA::statement::Lambda<0>
+          >
+        >
+      >
+    >;
 
 #define SYNC_DEVICE //cudaDeviceSynchronize();
 #else
@@ -154,7 +244,7 @@ void rhs4sg_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, int k
 		 float_sw4 h, const float_sw4* __restrict__ a_strx, const float_sw4* __restrict__ a_stry, 
 		 const float_sw4* __restrict__ a_strz )
 {
-  PUSH_RANGE("rhs4sg_rev",1);
+  //PUSH_RANGE("rhs4sg_rev",1);
    // This would work to create multi-dimensional C arrays:
    //   float_sw4** b_ar=(float_sw4*)malloc(ni*nj*sizeof(float_sw4*));
    //   for( int j=0;j<nj;j++)
@@ -193,12 +283,12 @@ void rhs4sg_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, int k
 
    int k1, k2;
    //int i, j, k, q, m, qb, mb;
-   float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
-   float_sw4 r1, r2, r3, mucof, mu1zz, mu2zz, mu3zz;
-   float_sw4 lap2mu, u3zip2, u3zip1, u3zim1, u3zim2, lau3zx, mu3xz, u3zjp2, u3zjp1, u3zjm1, u3zjm2;
-   float_sw4 lau3zy, mu3yz, mu1zx, mu2zy, u1zip2, u1zip1, u1zim1, u1zim2;
-   float_sw4 u2zjp2, u2zjp1, u2zjm1, u2zjm2, lau1xz, lau2yz;
-
+//   float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+//   float_sw4 r1, r2, r3, mucof, mu1zz, mu2zz, mu3zz;
+ //  float_sw4 lap2mu, u3zip2, u3zip1, u3zim1, u3zim2, lau3zx, mu3xz, u3zjp2, u3zjp1, u3zjm1, u3zjm2;
+//   float_sw4 lau3zy, mu3yz, mu1zx, mu2zy, u1zip2, u1zip1, u1zim1, u1zim2;
+ //  float_sw4 u2zjp2, u2zjp1, u2zjm1, u2zjm2, lau1xz, lau2yz;
+//   std::cout << "cof = " << h << std::endl;
    const float_sw4 cof = 1.0/(h*h);
 
 
@@ -208,14 +298,23 @@ void rhs4sg_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, int k
    k2 = klast-2;
    if( onesided[5] == 1 )
       k2 = nk-6;
+
+/*  for (int x=k1; x < k2+1;x++)
+    for (int y=jfirst+2; y<jlast-1; y++)
+      for(int z=ifirst+2; z < ilast-1; z++) {
+        if (z % 200 == 0)
+          std::cout << "Before: lu1=" << lu(1,z,y,x) << "\tlu2=" << lu(2,z,y,x) << "\tlu3=" << lu(3,z,y,x) << std::endl;
+      }
+*/
    {
      //std::cout<<"LOOPSET #1\n";
-     PUSH_RANGE("RHS4SG_REV:1",2);
+     //PUSH_RANGE("RHS4SG_REV:1",2);
      //#pragma ivdep
      //#pragma forceinline recursive
 RAJA::RangeSegment k_range(k1,k2+1);
      RAJA::RangeSegment j_range(jfirst+2,jlast-1);
      RAJA::RangeSegment i_range(ifirst+2,ilast-1);
+#ifndef BRIAN
 #if defined(UNRAJA)
      Range<16> I(ifirst+2,ilast-1);
      Range<4>J(jfirst+2,jlast-1);
@@ -245,7 +344,9 @@ __assume_aligned(a_stry,ASSUME_ALIGNED);
 __assume_aligned(a_strz,ASSUME_ALIGNED);
 #endif
 
-
+// TODO: BRIAN
+// mux and r1 all together?
+// or 
 /* from inner_loop_4a, 28x3 = 84 ops */
             mux1 = mu(i-1,j,k)*strx(i-1)-
 	       tf*(mu(i,j,k)*strx(i)+mu(i-2,j,k)*strx(i-2));
@@ -426,7 +527,7 @@ __assume_aligned(a_strz,ASSUME_ALIGNED);
                              8*(-u(3,i,j-1,k+1)+u(3,i,j+1,k+1))) ) - (
                         mu(i,j,k+2)*(u(3,i,j-2,k+2)-u(3,i,j+2,k+2)+
 				     8*(-u(3,i,j-1,k+2)+u(3,i,j+1,k+2))) )) ;
-/* 116 ops for r3 */
+/* 116 ops for r3 */ 
 /*  (mu*u_z)_x */
             r3 = r3 + strx(i)*strz(k)*
                  i144*( mu(i-2,j,k)*(u(1,i-2,j,k-2)-u(1,i-2,j,k+2)+
@@ -477,11 +578,695 @@ __assume_aligned(a_strz,ASSUME_ALIGNED);
             lu(3,i,j,k) =  cof*r3;
 				 }); // END OF RAJA LOOP
      SYNC_DEVICE;
-     POP_RANGE;
+     //POP_RANGE;
+#elif defined(RECOMPUTE)
+
+     //std::cout << "Submitting R1" <<  std::endl;
+
+     RAJA::kernel<BRIAN1>(
+                             RAJA::make_tuple(k_range, j_range,i_range),
+                             [=]RAJA_DEVICE (int k,int j,int i) {
+
+           float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+           float_sw4 r1;
+
+
+// TODO: BRIAN
+// mux and r1 all together?
+// or 
+/* from inner_loop_4a, 28x3 = 84 ops */
+            mux1 = mu(i-1,j,k)*strx(i-1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i-2,j,k)*strx(i-2));
+            mux2 = mu(i-2,j,k)*strx(i-2)+mu(i+1,j,k)*strx(i+1)+
+               3*(mu(i,j,k)*strx(i)+mu(i-1,j,k)*strx(i-1));
+            mux3 = mu(i-1,j,k)*strx(i-1)+mu(i+2,j,k)*strx(i+2)+
+               3*(mu(i+1,j,k)*strx(i+1)+mu(i,j,k)*strx(i));
+            mux4 = mu(i+1,j,k)*strx(i+1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i+2,j,k)*strx(i+2));
+
+            muy1 = mu(i,j-1,k)*stry(j-1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j-2,k)*stry(j-2));
+            muy2 = mu(i,j-2,k)*stry(j-2)+mu(i,j+1,k)*stry(j+1)+
+               3*(mu(i,j,k)*stry(j)+mu(i,j-1,k)*stry(j-1));
+            muy3 = mu(i,j-1,k)*stry(j-1)+mu(i,j+2,k)*stry(j+2)+
+               3*(mu(i,j+1,k)*stry(j+1)+mu(i,j,k)*stry(j));
+            muy4 = mu(i,j+1,k)*stry(j+1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j+2,k)*stry(j+2));
+
+            muz1 = mu(i,j,k-1)*strz(k-1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k-2)*strz(k-2));
+            muz2 = mu(i,j,k-2)*strz(k-2)+mu(i,j,k+1)*strz(k+1)+
+               3*(mu(i,j,k)*strz(k)+mu(i,j,k-1)*strz(k-1));
+            muz3 = mu(i,j,k-1)*strz(k-1)+mu(i,j,k+2)*strz(k+2)+
+               3*(mu(i,j,k+1)*strz(k+1)+mu(i,j,k)*strz(k));
+            muz4 = mu(i,j,k+1)*strz(k+1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k+2)*strz(k+2));
+
+            r1 = i6*( strx(i)*( (2*mux1+la(i-1,j,k)*strx(i-1)-
+               tf*(la(i,j,k)*strx(i)+la(i-2,j,k)*strx(i-2)))*
+                              (u(1,i-2,j,k)-u(1,i,j,k))+
+           (2*mux2+la(i-2,j,k)*strx(i-2)+la(i+1,j,k)*strx(i+1)+
+                3*(la(i,j,k)*strx(i)+la(i-1,j,k)*strx(i-1)))*
+                              (u(1,i-1,j,k)-u(1,i,j,k))+
+           (2*mux3+la(i-1,j,k)*strx(i-1)+la(i+2,j,k)*strx(i+2)+
+                3*(la(i+1,j,k)*strx(i+1)+la(i,j,k)*strx(i)))*
+                              (u(1,i+1,j,k)-u(1,i,j,k))+
+                (2*mux4+ la(i+1,j,k)*strx(i+1)-
+               tf*(la(i,j,k)*strx(i)+la(i+2,j,k)*strx(i+2)))*
+                (u(1,i+2,j,k)-u(1,i,j,k)) ) + stry(j)*(
+                     muy1*(u(1,i,j-2,k)-u(1,i,j,k)) +
+                     muy2*(u(1,i,j-1,k)-u(1,i,j,k)) +
+                     muy3*(u(1,i,j+1,k)-u(1,i,j,k)) +
+                     muy4*(u(1,i,j+2,k)-u(1,i,j,k)) ) + strz(k)*(
+                     muz1*(u(1,i,j,k-2)-u(1,i,j,k)) +
+                     muz2*(u(1,i,j,k-1)-u(1,i,j,k)) +
+                     muz3*(u(1,i,j,k+1)-u(1,i,j,k)) +
+                     muz4*(u(1,i,j,k+2)-u(1,i,j,k)) ) );
+
+            r1 = r1 + strx(i)*stry(j)*
+                 i144*( la(i-2,j,k)*(u(2,i-2,j-2,k)-u(2,i-2,j+2,k)+
+                             8*(-u(2,i-2,j-1,k)+u(2,i-2,j+1,k))) - 8*(
+                        la(i-1,j,k)*(u(2,i-1,j-2,k)-u(2,i-1,j+2,k)+
+                             8*(-u(2,i-1,j-1,k)+u(2,i-1,j+1,k))) )+8*(
+                        la(i+1,j,k)*(u(2,i+1,j-2,k)-u(2,i+1,j+2,k)+
+                             8*(-u(2,i+1,j-1,k)+u(2,i+1,j+1,k))) ) - (
+                        la(i+2,j,k)*(u(2,i+2,j-2,k)-u(2,i+2,j+2,k)+
+                             8*(-u(2,i+2,j-1,k)+u(2,i+2,j+1,k))) ))
+/*   (la*w_z)_x */
+               + strx(i)*strz(k)*
+                 i144*( la(i-2,j,k)*(u(3,i-2,j,k-2)-u(3,i-2,j,k+2)+
+                             8*(-u(3,i-2,j,k-1)+u(3,i-2,j,k+1))) - 8*(
+                        la(i-1,j,k)*(u(3,i-1,j,k-2)-u(3,i-1,j,k+2)+
+                             8*(-u(3,i-1,j,k-1)+u(3,i-1,j,k+1))) )+8*(
+                        la(i+1,j,k)*(u(3,i+1,j,k-2)-u(3,i+1,j,k+2)+
+                             8*(-u(3,i+1,j,k-1)+u(3,i+1,j,k+1))) ) - (
+                        la(i+2,j,k)*(u(3,i+2,j,k-2)-u(3,i+2,j,k+2)+
+                             8*(-u(3,i+2,j,k-1)+u(3,i+2,j,k+1))) ))
+/*   (mu*v_x)_y */
+               + strx(i)*stry(j)*
+                 i144*( mu(i,j-2,k)*(u(2,i-2,j-2,k)-u(2,i+2,j-2,k)+
+                             8*(-u(2,i-1,j-2,k)+u(2,i+1,j-2,k))) - 8*(
+                        mu(i,j-1,k)*(u(2,i-2,j-1,k)-u(2,i+2,j-1,k)+
+                             8*(-u(2,i-1,j-1,k)+u(2,i+1,j-1,k))) )+8*(
+                        mu(i,j+1,k)*(u(2,i-2,j+1,k)-u(2,i+2,j+1,k)+
+                             8*(-u(2,i-1,j+1,k)+u(2,i+1,j+1,k))) ) - (
+                        mu(i,j+2,k)*(u(2,i-2,j+2,k)-u(2,i+2,j+2,k)+
+                             8*(-u(2,i-1,j+2,k)+u(2,i+1,j+2,k))) ))
+/*   (mu*w_x)_z */
+               + strx(i)*strz(k)*
+                 i144*( mu(i,j,k-2)*(u(3,i-2,j,k-2)-u(3,i+2,j,k-2)+
+                             8*(-u(3,i-1,j,k-2)+u(3,i+1,j,k-2))) - 8*(
+                        mu(i,j,k-1)*(u(3,i-2,j,k-1)-u(3,i+2,j,k-1)+
+                             8*(-u(3,i-1,j,k-1)+u(3,i+1,j,k-1))) )+8*(
+                        mu(i,j,k+1)*(u(3,i-2,j,k+1)-u(3,i+2,j,k+1)+
+                             8*(-u(3,i-1,j,k+1)+u(3,i+1,j,k+1))) ) - (
+                        mu(i,j,k+2)*(u(3,i-2,j,k+2)-u(3,i+2,j,k+2)+
+                                     8*(-u(3,i-1,j,k+2)+u(3,i+1,j,k+2))) )) ;
+
+            lu(1,i,j,k) =  cof*r1;
+
+                                 }); // END OF RAJA LOOP
+//     SYNC_DEVICE;
+  //   QU::qu->wait();
+
+    // std::cout << "Submitting R2" <<  std::endl;
+
+     RAJA::kernel<BRIAN2>(
+                             RAJA::make_tuple(k_range, j_range,i_range),
+                             [=]RAJA_DEVICE (int k,int j,int i) {
+
+           float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+           float_sw4 r2;
+
+            mux1 = mu(i-1,j,k)*strx(i-1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i-2,j,k)*strx(i-2));
+            mux2 = mu(i-2,j,k)*strx(i-2)+mu(i+1,j,k)*strx(i+1)+
+               3*(mu(i,j,k)*strx(i)+mu(i-1,j,k)*strx(i-1));
+            mux3 = mu(i-1,j,k)*strx(i-1)+mu(i+2,j,k)*strx(i+2)+
+               3*(mu(i+1,j,k)*strx(i+1)+mu(i,j,k)*strx(i));
+            mux4 = mu(i+1,j,k)*strx(i+1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i+2,j,k)*strx(i+2));
+
+            muy1 = mu(i,j-1,k)*stry(j-1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j-2,k)*stry(j-2));
+            muy2 = mu(i,j-2,k)*stry(j-2)+mu(i,j+1,k)*stry(j+1)+
+               3*(mu(i,j,k)*stry(j)+mu(i,j-1,k)*stry(j-1));
+            muy3 = mu(i,j-1,k)*stry(j-1)+mu(i,j+2,k)*stry(j+2)+
+               3*(mu(i,j+1,k)*stry(j+1)+mu(i,j,k)*stry(j));
+            muy4 = mu(i,j+1,k)*stry(j+1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j+2,k)*stry(j+2));
+
+            muz1 = mu(i,j,k-1)*strz(k-1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k-2)*strz(k-2));
+            muz2 = mu(i,j,k-2)*strz(k-2)+mu(i,j,k+1)*strz(k+1)+
+               3*(mu(i,j,k)*strz(k)+mu(i,j,k-1)*strz(k-1));
+            muz3 = mu(i,j,k-1)*strz(k-1)+mu(i,j,k+2)*strz(k+2)+
+               3*(mu(i,j,k+1)*strz(k+1)+mu(i,j,k)*strz(k));
+            muz4 = mu(i,j,k+1)*strz(k+1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k+2)*strz(k+2));
+/* 75 ops */
+            r2 = i6*( strx(i)*(mux1*(u(2,i-2,j,k)-u(2,i,j,k)) +
+                      mux2*(u(2,i-1,j,k)-u(2,i,j,k)) +
+                      mux3*(u(2,i+1,j,k)-u(2,i,j,k)) +
+                      mux4*(u(2,i+2,j,k)-u(2,i,j,k)) ) + stry(j)*(
+                  (2*muy1+la(i,j-1,k)*stry(j-1)-
+                      tf*(la(i,j,k)*stry(j)+la(i,j-2,k)*stry(j-2)))*
+                          (u(2,i,j-2,k)-u(2,i,j,k))+
+           (2*muy2+la(i,j-2,k)*stry(j-2)+la(i,j+1,k)*stry(j+1)+
+                     3*(la(i,j,k)*stry(j)+la(i,j-1,k)*stry(j-1)))*
+                          (u(2,i,j-1,k)-u(2,i,j,k))+
+           (2*muy3+la(i,j-1,k)*stry(j-1)+la(i,j+2,k)*stry(j+2)+
+                     3*(la(i,j+1,k)*stry(j+1)+la(i,j,k)*stry(j)))*
+                          (u(2,i,j+1,k)-u(2,i,j,k))+
+                  (2*muy4+la(i,j+1,k)*stry(j+1)-
+                    tf*(la(i,j,k)*stry(j)+la(i,j+2,k)*stry(j+2)))*
+                          (u(2,i,j+2,k)-u(2,i,j,k)) ) + strz(k)*(
+                     muz1*(u(2,i,j,k-2)-u(2,i,j,k)) +
+                     muz2*(u(2,i,j,k-1)-u(2,i,j,k)) +
+                     muz3*(u(2,i,j,k+1)-u(2,i,j,k)) +
+                     muz4*(u(2,i,j,k+2)-u(2,i,j,k)) ) );
+
+            r2 = r2 + strx(i)*stry(j)*
+                 i144*( mu(i-2,j,k)*(u(1,i-2,j-2,k)-u(1,i-2,j+2,k)+
+                             8*(-u(1,i-2,j-1,k)+u(1,i-2,j+1,k))) - 8*(
+                        mu(i-1,j,k)*(u(1,i-1,j-2,k)-u(1,i-1,j+2,k)+
+                             8*(-u(1,i-1,j-1,k)+u(1,i-1,j+1,k))) )+8*(
+                        mu(i+1,j,k)*(u(1,i+1,j-2,k)-u(1,i+1,j+2,k)+
+                             8*(-u(1,i+1,j-1,k)+u(1,i+1,j+1,k))) ) - (
+                        mu(i+2,j,k)*(u(1,i+2,j-2,k)-u(1,i+2,j+2,k)+
+                             8*(-u(1,i+2,j-1,k)+u(1,i+2,j+1,k))) ))
+/* (la*u_x)_y */
+              + strx(i)*stry(j)*
+                 i144*( la(i,j-2,k)*(u(1,i-2,j-2,k)-u(1,i+2,j-2,k)+
+                             8*(-u(1,i-1,j-2,k)+u(1,i+1,j-2,k))) - 8*(
+                        la(i,j-1,k)*(u(1,i-2,j-1,k)-u(1,i+2,j-1,k)+
+                             8*(-u(1,i-1,j-1,k)+u(1,i+1,j-1,k))) )+8*(
+                        la(i,j+1,k)*(u(1,i-2,j+1,k)-u(1,i+2,j+1,k)+
+                             8*(-u(1,i-1,j+1,k)+u(1,i+1,j+1,k))) ) - (
+                        la(i,j+2,k)*(u(1,i-2,j+2,k)-u(1,i+2,j+2,k)+
+                             8*(-u(1,i-1,j+2,k)+u(1,i+1,j+2,k))) ))
+/* (la*w_z)_y */
+               + stry(j)*strz(k)*
+                 i144*( la(i,j-2,k)*(u(3,i,j-2,k-2)-u(3,i,j-2,k+2)+
+                             8*(-u(3,i,j-2,k-1)+u(3,i,j-2,k+1))) - 8*(
+                        la(i,j-1,k)*(u(3,i,j-1,k-2)-u(3,i,j-1,k+2)+
+                             8*(-u(3,i,j-1,k-1)+u(3,i,j-1,k+1))) )+8*(
+                        la(i,j+1,k)*(u(3,i,j+1,k-2)-u(3,i,j+1,k+2)+
+                             8*(-u(3,i,j+1,k-1)+u(3,i,j+1,k+1))) ) - (
+                        la(i,j+2,k)*(u(3,i,j+2,k-2)-u(3,i,j+2,k+2)+
+                             8*(-u(3,i,j+2,k-1)+u(3,i,j+2,k+1))) ))
+/* (mu*w_y)_z */
+               + stry(j)*strz(k)*
+                 i144*( mu(i,j,k-2)*(u(3,i,j-2,k-2)-u(3,i,j+2,k-2)+
+                             8*(-u(3,i,j-1,k-2)+u(3,i,j+1,k-2))) - 8*(
+                        mu(i,j,k-1)*(u(3,i,j-2,k-1)-u(3,i,j+2,k-1)+
+                             8*(-u(3,i,j-1,k-1)+u(3,i,j+1,k-1))) )+8*(
+                        mu(i,j,k+1)*(u(3,i,j-2,k+1)-u(3,i,j+2,k+1)+
+                             8*(-u(3,i,j-1,k+1)+u(3,i,j+1,k+1))) ) - (
+                        mu(i,j,k+2)*(u(3,i,j-2,k+2)-u(3,i,j+2,k+2)+
+                                     8*(-u(3,i,j-1,k+2)+u(3,i,j+1,k+2))) )) ;
+
+            lu(2,i,j,k) =  cof*r2;
+
+                                 }); // END OF RAJA LOOP
+ //    SYNC_DEVICE;
+   //  QU::qu->wait();
+
+  //   std::cout << "Submitting R3" <<  std::endl;
+
+     RAJA::kernel<BRIAN3>(
+                             RAJA::make_tuple(k_range, j_range,i_range),
+                             [=]RAJA_DEVICE (int k,int j,int i) {
+
+           float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+           float_sw4 r3;
+
+            mux1 = mu(i-1,j,k)*strx(i-1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i-2,j,k)*strx(i-2));
+            mux2 = mu(i-2,j,k)*strx(i-2)+mu(i+1,j,k)*strx(i+1)+
+               3*(mu(i,j,k)*strx(i)+mu(i-1,j,k)*strx(i-1));
+            mux3 = mu(i-1,j,k)*strx(i-1)+mu(i+2,j,k)*strx(i+2)+
+               3*(mu(i+1,j,k)*strx(i+1)+mu(i,j,k)*strx(i));
+            mux4 = mu(i+1,j,k)*strx(i+1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i+2,j,k)*strx(i+2));
+
+            muy1 = mu(i,j-1,k)*stry(j-1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j-2,k)*stry(j-2));
+            muy2 = mu(i,j-2,k)*stry(j-2)+mu(i,j+1,k)*stry(j+1)+
+               3*(mu(i,j,k)*stry(j)+mu(i,j-1,k)*stry(j-1));
+            muy3 = mu(i,j-1,k)*stry(j-1)+mu(i,j+2,k)*stry(j+2)+
+               3*(mu(i,j+1,k)*stry(j+1)+mu(i,j,k)*stry(j));
+            muy4 = mu(i,j+1,k)*stry(j+1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j+2,k)*stry(j+2));
+
+            muz1 = mu(i,j,k-1)*strz(k-1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k-2)*strz(k-2));
+            muz2 = mu(i,j,k-2)*strz(k-2)+mu(i,j,k+1)*strz(k+1)+
+               3*(mu(i,j,k)*strz(k)+mu(i,j,k-1)*strz(k-1));
+            muz3 = mu(i,j,k-1)*strz(k-1)+mu(i,j,k+2)*strz(k+2)+
+               3*(mu(i,j,k+1)*strz(k+1)+mu(i,j,k)*strz(k));
+            muz4 = mu(i,j,k+1)*strz(k+1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k+2)*strz(k+2));
+
+/* 75 ops */
+            r3 = i6*( strx(i)*(mux1*(u(3,i-2,j,k)-u(3,i,j,k)) +
+                      mux2*(u(3,i-1,j,k)-u(3,i,j,k)) +
+                      mux3*(u(3,i+1,j,k)-u(3,i,j,k)) +
+                      mux4*(u(3,i+2,j,k)-u(3,i,j,k))  ) + stry(j)*(
+                     muy1*(u(3,i,j-2,k)-u(3,i,j,k)) +
+                     muy2*(u(3,i,j-1,k)-u(3,i,j,k)) +
+                     muy3*(u(3,i,j+1,k)-u(3,i,j,k)) +
+                     muy4*(u(3,i,j+2,k)-u(3,i,j,k)) ) + strz(k)*(
+                  (2*muz1+la(i,j,k-1)*strz(k-1)-
+                      tf*(la(i,j,k)*strz(k)+la(i,j,k-2)*strz(k-2)))*
+                          (u(3,i,j,k-2)-u(3,i,j,k))+
+           (2*muz2+la(i,j,k-2)*strz(k-2)+la(i,j,k+1)*strz(k+1)+
+                      3*(la(i,j,k)*strz(k)+la(i,j,k-1)*strz(k-1)))*
+                          (u(3,i,j,k-1)-u(3,i,j,k))+
+           (2*muz3+la(i,j,k-1)*strz(k-1)+la(i,j,k+2)*strz(k+2)+
+                      3*(la(i,j,k+1)*strz(k+1)+la(i,j,k)*strz(k)))*
+                          (u(3,i,j,k+1)-u(3,i,j,k))+
+                  (2*muz4+la(i,j,k+1)*strz(k+1)-
+                    tf*(la(i,j,k)*strz(k)+la(i,j,k+2)*strz(k+2)))*
+                  (u(3,i,j,k+2)-u(3,i,j,k)) ) );
+
+/* 116 ops for r3 */
+/*  (mu*u_z)_x */
+            r3 = r3 + strx(i)*strz(k)*
+                 i144*( mu(i-2,j,k)*(u(1,i-2,j,k-2)-u(1,i-2,j,k+2)+
+                             8*(-u(1,i-2,j,k-1)+u(1,i-2,j,k+1))) - 8*(
+                        mu(i-1,j,k)*(u(1,i-1,j,k-2)-u(1,i-1,j,k+2)+
+                             8*(-u(1,i-1,j,k-1)+u(1,i-1,j,k+1))) )+8*(
+                        mu(i+1,j,k)*(u(1,i+1,j,k-2)-u(1,i+1,j,k+2)+
+                             8*(-u(1,i+1,j,k-1)+u(1,i+1,j,k+1))) ) - (
+                        mu(i+2,j,k)*(u(1,i+2,j,k-2)-u(1,i+2,j,k+2)+
+                             8*(-u(1,i+2,j,k-1)+u(1,i+2,j,k+1))) ))
+/* (mu*v_z)_y */
+              + stry(j)*strz(k)*
+                 i144*( mu(i,j-2,k)*(u(2,i,j-2,k-2)-u(2,i,j-2,k+2)+
+                             8*(-u(2,i,j-2,k-1)+u(2,i,j-2,k+1))) - 8*(
+                        mu(i,j-1,k)*(u(2,i,j-1,k-2)-u(2,i,j-1,k+2)+
+                             8*(-u(2,i,j-1,k-1)+u(2,i,j-1,k+1))) )+8*(
+                        mu(i,j+1,k)*(u(2,i,j+1,k-2)-u(2,i,j+1,k+2)+
+                             8*(-u(2,i,j+1,k-1)+u(2,i,j+1,k+1))) ) - (
+                        mu(i,j+2,k)*(u(2,i,j+2,k-2)-u(2,i,j+2,k+2)+
+                             8*(-u(2,i,j+2,k-1)+u(2,i,j+2,k+1))) ))
+/*   (la*u_x)_z */
+              + strx(i)*strz(k)*
+                 i144*( la(i,j,k-2)*(u(1,i-2,j,k-2)-u(1,i+2,j,k-2)+
+                             8*(-u(1,i-1,j,k-2)+u(1,i+1,j,k-2))) - 8*(
+                        la(i,j,k-1)*(u(1,i-2,j,k-1)-u(1,i+2,j,k-1)+
+                             8*(-u(1,i-1,j,k-1)+u(1,i+1,j,k-1))) )+8*(
+                        la(i,j,k+1)*(u(1,i-2,j,k+1)-u(1,i+2,j,k+1)+
+                             8*(-u(1,i-1,j,k+1)+u(1,i+1,j,k+1))) ) - (
+                        la(i,j,k+2)*(u(1,i-2,j,k+2)-u(1,i+2,j,k+2)+
+                             8*(-u(1,i-1,j,k+2)+u(1,i+1,j,k+2))) ))
+/* (la*v_y)_z */
+              + stry(j)*strz(k)*
+                 i144*( la(i,j,k-2)*(u(2,i,j-2,k-2)-u(2,i,j+2,k-2)+
+                             8*(-u(2,i,j-1,k-2)+u(2,i,j+1,k-2))) - 8*(
+                        la(i,j,k-1)*(u(2,i,j-2,k-1)-u(2,i,j+2,k-1)+
+                             8*(-u(2,i,j-1,k-1)+u(2,i,j+1,k-1))) )+8*(
+                        la(i,j,k+1)*(u(2,i,j-2,k+1)-u(2,i,j+2,k+1)+
+                             8*(-u(2,i,j-1,k+1)+u(2,i,j+1,k+1))) ) - (
+                        la(i,j,k+2)*(u(2,i,j-2,k+2)-u(2,i,j+2,k+2)+
+                                     8*(-u(2,i,j-1,k+2)+u(2,i,j+1,k+2))) )) ;
+
+            lu(3,i,j,k) =  cof*r3;
+
+                                 }); // END OF RAJA LOOP
+
+//     std::cout << "I'm finished" <<  std::endl;
+#else
+
+     std::cout << "Submitting coefficient compute" <<  std::endl;
+
+     float_sw4* d_mux1 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_mux2 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_mux3 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_mux4 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+
+     float_sw4* d_muy1 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_muy2 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_muy3 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_muy4 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+
+     float_sw4* d_muz1 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_muz2 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_muz3 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+     float_sw4* d_muz4 = cl::sycl::malloc_device<float_sw4>(k_range.size() * j_range.size() * i_range.size(), *QU::qu);
+
+     QU::qu->wait();
+     RAJA::kernel<BRIAN1>(
+                             RAJA::make_tuple(k_range, j_range,i_range),
+                             [=]RAJA_DEVICE (int k,int j,int i) {
+
+//           float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+//           float_sw4 r1;
+
+			     
+
+// TODO: BRIAN
+// mux and r1 all together?
+// or 
+/* from inner_loop_4a, 28x3 = 84 ops */
+	    int ii = i + (j * i_range.size()) + (k * i_range.size() * j_range.size());
+            d_mux1[ii] = mu(i-1,j,k)*strx(i-1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i-2,j,k)*strx(i-2));
+            d_mux2[ii] = mu(i-2,j,k)*strx(i-2)+mu(i+1,j,k)*strx(i+1)+
+               3*(mu(i,j,k)*strx(i)+mu(i-1,j,k)*strx(i-1));
+            d_mux3[ii] = mu(i-1,j,k)*strx(i-1)+mu(i+2,j,k)*strx(i+2)+
+               3*(mu(i+1,j,k)*strx(i+1)+mu(i,j,k)*strx(i));
+            d_mux4[ii] = mu(i+1,j,k)*strx(i+1)-
+               tf*(mu(i,j,k)*strx(i)+mu(i+2,j,k)*strx(i+2));
+
+            d_muy1[ii] = mu(i,j-1,k)*stry(j-1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j-2,k)*stry(j-2));
+            d_muy2[ii] = mu(i,j-2,k)*stry(j-2)+mu(i,j+1,k)*stry(j+1)+
+               3*(mu(i,j,k)*stry(j)+mu(i,j-1,k)*stry(j-1));
+            d_muy3[ii] = mu(i,j-1,k)*stry(j-1)+mu(i,j+2,k)*stry(j+2)+
+               3*(mu(i,j+1,k)*stry(j+1)+mu(i,j,k)*stry(j));
+            d_muy4[ii] = mu(i,j+1,k)*stry(j+1)-
+               tf*(mu(i,j,k)*stry(j)+mu(i,j+2,k)*stry(j+2));
+
+            d_muz1[ii] = mu(i,j,k-1)*strz(k-1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k-2)*strz(k-2));
+            d_muz2[ii] = mu(i,j,k-2)*strz(k-2)+mu(i,j,k+1)*strz(k+1)+
+               3*(mu(i,j,k)*strz(k)+mu(i,j,k-1)*strz(k-1));
+            d_muz3[ii] = mu(i,j,k-1)*strz(k-1)+mu(i,j,k+2)*strz(k+2)+
+               3*(mu(i,j,k+1)*strz(k+1)+mu(i,j,k)*strz(k));
+            d_muz4[ii] = mu(i,j,k+1)*strz(k+1)-
+               tf*(mu(i,j,k)*strz(k)+mu(i,j,k+2)*strz(k+2));
+
+	   }); 
+     QU::qu->wait();
+     RAJA::kernel<BRIAN1>(
+                             RAJA::make_tuple(k_range, j_range,i_range),
+                             [=]RAJA_DEVICE (int k,int j,int i) {	    
+            float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+            float_sw4 r1;
+    	    int ii = i + (j * i_range.size()) + (k * i_range.size() * j_range.size());
+            mux1 = d_mux1[ii];
+	    mux2 = d_mux2[ii];
+	    mux3 = d_mux3[ii];
+	    mux4 = d_mux4[ii];
+
+	    muy1 = d_muy1[ii];
+	    muy2 = d_muy2[ii];
+	    muy3 = d_muy3[ii];
+	    muy4 = d_muy4[ii];
+
+	    muz1 = d_muz1[ii];
+	    muz2 = d_muz2[ii];
+	    muz3 = d_muz3[ii];
+	    muz4 = d_muz4[ii];
+
+            r1 = i6*( strx(i)*( (2*mux1+la(i-1,j,k)*strx(i-1)-
+               tf*(la(i,j,k)*strx(i)+la(i-2,j,k)*strx(i-2)))*
+                              (u(1,i-2,j,k)-u(1,i,j,k))+
+           (2*mux2+la(i-2,j,k)*strx(i-2)+la(i+1,j,k)*strx(i+1)+
+                3*(la(i,j,k)*strx(i)+la(i-1,j,k)*strx(i-1)))*
+                              (u(1,i-1,j,k)-u(1,i,j,k))+
+           (2*mux3+la(i-1,j,k)*strx(i-1)+la(i+2,j,k)*strx(i+2)+
+                3*(la(i+1,j,k)*strx(i+1)+la(i,j,k)*strx(i)))*
+                              (u(1,i+1,j,k)-u(1,i,j,k))+
+                (2*mux4+ la(i+1,j,k)*strx(i+1)-
+               tf*(la(i,j,k)*strx(i)+la(i+2,j,k)*strx(i+2)))*
+                (u(1,i+2,j,k)-u(1,i,j,k)) ) + stry(j)*(
+                     muy1*(u(1,i,j-2,k)-u(1,i,j,k)) +
+                     muy2*(u(1,i,j-1,k)-u(1,i,j,k)) +
+                     muy3*(u(1,i,j+1,k)-u(1,i,j,k)) +
+                     muy4*(u(1,i,j+2,k)-u(1,i,j,k)) ) + strz(k)*(
+                     muz1*(u(1,i,j,k-2)-u(1,i,j,k)) +
+                     muz2*(u(1,i,j,k-1)-u(1,i,j,k)) +
+                     muz3*(u(1,i,j,k+1)-u(1,i,j,k)) +
+                     muz4*(u(1,i,j,k+2)-u(1,i,j,k)) ) );
+
+            r1 = r1 + strx(i)*stry(j)*
+                 i144*( la(i-2,j,k)*(u(2,i-2,j-2,k)-u(2,i-2,j+2,k)+
+                             8*(-u(2,i-2,j-1,k)+u(2,i-2,j+1,k))) - 8*(
+                        la(i-1,j,k)*(u(2,i-1,j-2,k)-u(2,i-1,j+2,k)+
+                             8*(-u(2,i-1,j-1,k)+u(2,i-1,j+1,k))) )+8*(
+                        la(i+1,j,k)*(u(2,i+1,j-2,k)-u(2,i+1,j+2,k)+
+                             8*(-u(2,i+1,j-1,k)+u(2,i+1,j+1,k))) ) - (
+                        la(i+2,j,k)*(u(2,i+2,j-2,k)-u(2,i+2,j+2,k)+
+                             8*(-u(2,i+2,j-1,k)+u(2,i+2,j+1,k))) ))
+/*   (la*w_z)_x */
+               + strx(i)*strz(k)*
+                 i144*( la(i-2,j,k)*(u(3,i-2,j,k-2)-u(3,i-2,j,k+2)+
+                             8*(-u(3,i-2,j,k-1)+u(3,i-2,j,k+1))) - 8*(
+                        la(i-1,j,k)*(u(3,i-1,j,k-2)-u(3,i-1,j,k+2)+
+                             8*(-u(3,i-1,j,k-1)+u(3,i-1,j,k+1))) )+8*(
+                        la(i+1,j,k)*(u(3,i+1,j,k-2)-u(3,i+1,j,k+2)+
+                             8*(-u(3,i+1,j,k-1)+u(3,i+1,j,k+1))) ) - (
+                        la(i+2,j,k)*(u(3,i+2,j,k-2)-u(3,i+2,j,k+2)+
+                             8*(-u(3,i+2,j,k-1)+u(3,i+2,j,k+1))) ))
+/*   (mu*v_x)_y */
+               + strx(i)*stry(j)*
+                 i144*( mu(i,j-2,k)*(u(2,i-2,j-2,k)-u(2,i+2,j-2,k)+
+                             8*(-u(2,i-1,j-2,k)+u(2,i+1,j-2,k))) - 8*(
+                        mu(i,j-1,k)*(u(2,i-2,j-1,k)-u(2,i+2,j-1,k)+
+                             8*(-u(2,i-1,j-1,k)+u(2,i+1,j-1,k))) )+8*(
+                        mu(i,j+1,k)*(u(2,i-2,j+1,k)-u(2,i+2,j+1,k)+
+                             8*(-u(2,i-1,j+1,k)+u(2,i+1,j+1,k))) ) - (
+                        mu(i,j+2,k)*(u(2,i-2,j+2,k)-u(2,i+2,j+2,k)+
+                             8*(-u(2,i-1,j+2,k)+u(2,i+1,j+2,k))) ))
+/*   (mu*w_x)_z */
+               + strx(i)*strz(k)*
+                 i144*( mu(i,j,k-2)*(u(3,i-2,j,k-2)-u(3,i+2,j,k-2)+
+                             8*(-u(3,i-1,j,k-2)+u(3,i+1,j,k-2))) - 8*(
+                        mu(i,j,k-1)*(u(3,i-2,j,k-1)-u(3,i+2,j,k-1)+
+                             8*(-u(3,i-1,j,k-1)+u(3,i+1,j,k-1))) )+8*(
+                        mu(i,j,k+1)*(u(3,i-2,j,k+1)-u(3,i+2,j,k+1)+
+                             8*(-u(3,i-1,j,k+1)+u(3,i+1,j,k+1))) ) - (
+                        mu(i,j,k+2)*(u(3,i-2,j,k+2)-u(3,i+2,j,k+2)+
+                                     8*(-u(3,i-1,j,k+2)+u(3,i+1,j,k+2))) )) ;
+
+            lu(1,i,j,k) =  cof*r1;
+
+                                 }); // END OF RAJA LOOP
+//     SYNC_DEVICE;
+  //   QU::qu->wait();
+
+    // std::cout << "Submitting R2" <<  std::endl;
+
+     RAJA::kernel<BRIAN2>(
+                             RAJA::make_tuple(k_range, j_range,i_range),
+                             [=]RAJA_DEVICE (int k,int j,int i) {
+
+           float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+           float_sw4 r2;
+            int ii = i + (j * i_range.size()) + (k * i_range.size() * j_range.size());
+	    mux1 = d_mux1[ii];
+            mux2 = d_mux2[ii];
+            mux3 = d_mux3[ii];
+            mux4 = d_mux4[ii];
+
+            muy1 = d_muy1[ii];
+            muy2 = d_muy2[ii];
+            muy3 = d_muy3[ii];
+            muy4 = d_muy4[ii];
+
+            muz1 = d_muz1[ii];
+            muz2 = d_muz2[ii];
+            muz3 = d_muz3[ii];
+            muz4 = d_muz4[ii];
+
+
+/* 75 ops */
+            r2 = i6*( strx(i)*(mux1*(u(2,i-2,j,k)-u(2,i,j,k)) +
+                      mux2*(u(2,i-1,j,k)-u(2,i,j,k)) +
+                      mux3*(u(2,i+1,j,k)-u(2,i,j,k)) +
+                      mux4*(u(2,i+2,j,k)-u(2,i,j,k)) ) + stry(j)*(
+                  (2*muy1+la(i,j-1,k)*stry(j-1)-
+                      tf*(la(i,j,k)*stry(j)+la(i,j-2,k)*stry(j-2)))*
+                          (u(2,i,j-2,k)-u(2,i,j,k))+
+           (2*muy2+la(i,j-2,k)*stry(j-2)+la(i,j+1,k)*stry(j+1)+
+                     3*(la(i,j,k)*stry(j)+la(i,j-1,k)*stry(j-1)))*
+                          (u(2,i,j-1,k)-u(2,i,j,k))+
+           (2*muy3+la(i,j-1,k)*stry(j-1)+la(i,j+2,k)*stry(j+2)+
+                     3*(la(i,j+1,k)*stry(j+1)+la(i,j,k)*stry(j)))*
+                          (u(2,i,j+1,k)-u(2,i,j,k))+
+                  (2*muy4+la(i,j+1,k)*stry(j+1)-
+                    tf*(la(i,j,k)*stry(j)+la(i,j+2,k)*stry(j+2)))*
+                          (u(2,i,j+2,k)-u(2,i,j,k)) ) + strz(k)*(
+                     muz1*(u(2,i,j,k-2)-u(2,i,j,k)) +
+                     muz2*(u(2,i,j,k-1)-u(2,i,j,k)) +
+                     muz3*(u(2,i,j,k+1)-u(2,i,j,k)) +
+                     muz4*(u(2,i,j,k+2)-u(2,i,j,k)) ) );
+
+            r2 = r2 + strx(i)*stry(j)*
+                 i144*( mu(i-2,j,k)*(u(1,i-2,j-2,k)-u(1,i-2,j+2,k)+
+                             8*(-u(1,i-2,j-1,k)+u(1,i-2,j+1,k))) - 8*(
+                        mu(i-1,j,k)*(u(1,i-1,j-2,k)-u(1,i-1,j+2,k)+
+                             8*(-u(1,i-1,j-1,k)+u(1,i-1,j+1,k))) )+8*(
+                        mu(i+1,j,k)*(u(1,i+1,j-2,k)-u(1,i+1,j+2,k)+
+                             8*(-u(1,i+1,j-1,k)+u(1,i+1,j+1,k))) ) - (
+                        mu(i+2,j,k)*(u(1,i+2,j-2,k)-u(1,i+2,j+2,k)+
+                             8*(-u(1,i+2,j-1,k)+u(1,i+2,j+1,k))) ))
+/* (la*u_x)_y */
+              + strx(i)*stry(j)*
+                 i144*( la(i,j-2,k)*(u(1,i-2,j-2,k)-u(1,i+2,j-2,k)+
+                             8*(-u(1,i-1,j-2,k)+u(1,i+1,j-2,k))) - 8*(
+                        la(i,j-1,k)*(u(1,i-2,j-1,k)-u(1,i+2,j-1,k)+
+                             8*(-u(1,i-1,j-1,k)+u(1,i+1,j-1,k))) )+8*(
+                        la(i,j+1,k)*(u(1,i-2,j+1,k)-u(1,i+2,j+1,k)+
+                             8*(-u(1,i-1,j+1,k)+u(1,i+1,j+1,k))) ) - (
+                        la(i,j+2,k)*(u(1,i-2,j+2,k)-u(1,i+2,j+2,k)+
+                             8*(-u(1,i-1,j+2,k)+u(1,i+1,j+2,k))) ))
+/* (la*w_z)_y */
+               + stry(j)*strz(k)*
+                 i144*( la(i,j-2,k)*(u(3,i,j-2,k-2)-u(3,i,j-2,k+2)+
+                             8*(-u(3,i,j-2,k-1)+u(3,i,j-2,k+1))) - 8*(
+                        la(i,j-1,k)*(u(3,i,j-1,k-2)-u(3,i,j-1,k+2)+
+                             8*(-u(3,i,j-1,k-1)+u(3,i,j-1,k+1))) )+8*(
+                        la(i,j+1,k)*(u(3,i,j+1,k-2)-u(3,i,j+1,k+2)+
+                             8*(-u(3,i,j+1,k-1)+u(3,i,j+1,k+1))) ) - (
+                        la(i,j+2,k)*(u(3,i,j+2,k-2)-u(3,i,j+2,k+2)+
+                             8*(-u(3,i,j+2,k-1)+u(3,i,j+2,k+1))) ))
+/* (mu*w_y)_z */
+               + stry(j)*strz(k)*
+                 i144*( mu(i,j,k-2)*(u(3,i,j-2,k-2)-u(3,i,j+2,k-2)+
+                             8*(-u(3,i,j-1,k-2)+u(3,i,j+1,k-2))) - 8*(
+                        mu(i,j,k-1)*(u(3,i,j-2,k-1)-u(3,i,j+2,k-1)+
+                             8*(-u(3,i,j-1,k-1)+u(3,i,j+1,k-1))) )+8*(
+                        mu(i,j,k+1)*(u(3,i,j-2,k+1)-u(3,i,j+2,k+1)+
+                             8*(-u(3,i,j-1,k+1)+u(3,i,j+1,k+1))) ) - (
+                        mu(i,j,k+2)*(u(3,i,j-2,k+2)-u(3,i,j+2,k+2)+
+                                     8*(-u(3,i,j-1,k+2)+u(3,i,j+1,k+2))) )) ;
+
+            lu(2,i,j,k) =  cof*r2;
+
+                                 }); // END OF RAJA LOOP
+ //    SYNC_DEVICE;
+   //  QU::qu->wait();
+
+  //   std::cout << "Submitting R3" <<  std::endl;
+
+     RAJA::kernel<BRIAN3>(
+                             RAJA::make_tuple(k_range, j_range,i_range),
+                             [=]RAJA_DEVICE (int k,int j,int i) {
+
+           float_sw4 mux1, mux2, mux3, mux4, muy1, muy2, muy3, muy4, muz1, muz2, muz3, muz4;
+           float_sw4 r3;
+
+	    int ii = i + (j * i_range.size()) + (k * i_range.size() * j_range.size());
+            mux1 = d_mux1[ii];
+            mux2 = d_mux2[ii];
+            mux3 = d_mux3[ii];
+            mux4 = d_mux4[ii];
+
+            muy1 = d_muy1[ii];
+            muy2 = d_muy2[ii];
+            muy3 = d_muy3[ii];
+            muy4 = d_muy4[ii];
+
+            muz1 = d_muz1[ii];
+            muz2 = d_muz2[ii];
+            muz3 = d_muz3[ii];
+            muz4 = d_muz4[ii];
+
+
+/* 75 ops */
+            r3 = i6*( strx(i)*(mux1*(u(3,i-2,j,k)-u(3,i,j,k)) +
+                      mux2*(u(3,i-1,j,k)-u(3,i,j,k)) +
+                      mux3*(u(3,i+1,j,k)-u(3,i,j,k)) +
+                      mux4*(u(3,i+2,j,k)-u(3,i,j,k))  ) + stry(j)*(
+                     muy1*(u(3,i,j-2,k)-u(3,i,j,k)) +
+                     muy2*(u(3,i,j-1,k)-u(3,i,j,k)) +
+                     muy3*(u(3,i,j+1,k)-u(3,i,j,k)) +
+                     muy4*(u(3,i,j+2,k)-u(3,i,j,k)) ) + strz(k)*(
+                  (2*muz1+la(i,j,k-1)*strz(k-1)-
+                      tf*(la(i,j,k)*strz(k)+la(i,j,k-2)*strz(k-2)))*
+                          (u(3,i,j,k-2)-u(3,i,j,k))+
+           (2*muz2+la(i,j,k-2)*strz(k-2)+la(i,j,k+1)*strz(k+1)+
+                      3*(la(i,j,k)*strz(k)+la(i,j,k-1)*strz(k-1)))*
+                          (u(3,i,j,k-1)-u(3,i,j,k))+
+           (2*muz3+la(i,j,k-1)*strz(k-1)+la(i,j,k+2)*strz(k+2)+
+                      3*(la(i,j,k+1)*strz(k+1)+la(i,j,k)*strz(k)))*
+                          (u(3,i,j,k+1)-u(3,i,j,k))+
+                  (2*muz4+la(i,j,k+1)*strz(k+1)-
+                    tf*(la(i,j,k)*strz(k)+la(i,j,k+2)*strz(k+2)))*
+                  (u(3,i,j,k+2)-u(3,i,j,k)) ) );
+
+/* 116 ops for r3 */
+/*  (mu*u_z)_x */
+            r3 = r3 + strx(i)*strz(k)*
+                 i144*( mu(i-2,j,k)*(u(1,i-2,j,k-2)-u(1,i-2,j,k+2)+
+                             8*(-u(1,i-2,j,k-1)+u(1,i-2,j,k+1))) - 8*(
+                        mu(i-1,j,k)*(u(1,i-1,j,k-2)-u(1,i-1,j,k+2)+
+                             8*(-u(1,i-1,j,k-1)+u(1,i-1,j,k+1))) )+8*(
+                        mu(i+1,j,k)*(u(1,i+1,j,k-2)-u(1,i+1,j,k+2)+
+                             8*(-u(1,i+1,j,k-1)+u(1,i+1,j,k+1))) ) - (
+                        mu(i+2,j,k)*(u(1,i+2,j,k-2)-u(1,i+2,j,k+2)+
+                             8*(-u(1,i+2,j,k-1)+u(1,i+2,j,k+1))) ))
+/* (mu*v_z)_y */
+              + stry(j)*strz(k)*
+                 i144*( mu(i,j-2,k)*(u(2,i,j-2,k-2)-u(2,i,j-2,k+2)+
+                             8*(-u(2,i,j-2,k-1)+u(2,i,j-2,k+1))) - 8*(
+                        mu(i,j-1,k)*(u(2,i,j-1,k-2)-u(2,i,j-1,k+2)+
+                             8*(-u(2,i,j-1,k-1)+u(2,i,j-1,k+1))) )+8*(
+                        mu(i,j+1,k)*(u(2,i,j+1,k-2)-u(2,i,j+1,k+2)+
+                             8*(-u(2,i,j+1,k-1)+u(2,i,j+1,k+1))) ) - (
+                        mu(i,j+2,k)*(u(2,i,j+2,k-2)-u(2,i,j+2,k+2)+
+                             8*(-u(2,i,j+2,k-1)+u(2,i,j+2,k+1))) ))
+/*   (la*u_x)_z */
+              + strx(i)*strz(k)*
+                 i144*( la(i,j,k-2)*(u(1,i-2,j,k-2)-u(1,i+2,j,k-2)+
+                             8*(-u(1,i-1,j,k-2)+u(1,i+1,j,k-2))) - 8*(
+                        la(i,j,k-1)*(u(1,i-2,j,k-1)-u(1,i+2,j,k-1)+
+                             8*(-u(1,i-1,j,k-1)+u(1,i+1,j,k-1))) )+8*(
+                        la(i,j,k+1)*(u(1,i-2,j,k+1)-u(1,i+2,j,k+1)+
+                             8*(-u(1,i-1,j,k+1)+u(1,i+1,j,k+1))) ) - (
+                        la(i,j,k+2)*(u(1,i-2,j,k+2)-u(1,i+2,j,k+2)+
+                             8*(-u(1,i-1,j,k+2)+u(1,i+1,j,k+2))) ))
+/* (la*v_y)_z */
+              + stry(j)*strz(k)*
+                 i144*( la(i,j,k-2)*(u(2,i,j-2,k-2)-u(2,i,j+2,k-2)+
+                             8*(-u(2,i,j-1,k-2)+u(2,i,j+1,k-2))) - 8*(
+                        la(i,j,k-1)*(u(2,i,j-2,k-1)-u(2,i,j+2,k-1)+
+                             8*(-u(2,i,j-1,k-1)+u(2,i,j+1,k-1))) )+8*(
+                        la(i,j,k+1)*(u(2,i,j-2,k+1)-u(2,i,j+2,k+1)+
+                             8*(-u(2,i,j-1,k+1)+u(2,i,j+1,k+1))) ) - (
+                        la(i,j,k+2)*(u(2,i,j-2,k+2)-u(2,i,j+2,k+2)+
+                                     8*(-u(2,i,j-1,k+2)+u(2,i,j+1,k+2))) )) ;
+
+            lu(3,i,j,k) =  cof*r3;
+
+                                 }); // END OF RAJA LOOP
+
+//     std::cout << "I'm finished" <<  std::endl;
+
+
+#endif
+  QU::qu->wait();
+#ifdef BRIAN
+  cl::sycl::free(d_mux1, *QU::qu);
+  cl::sycl::free(d_mux2, *QU::qu);
+  cl::sycl::free(d_mux3, *QU::qu);
+  cl::sycl::free(d_mux4, *QU::qu);
+
+  cl::sycl::free(d_muy1, *QU::qu);
+  cl::sycl::free(d_muy2, *QU::qu);
+  cl::sycl::free(d_muy3, *QU::qu);
+  cl::sycl::free(d_muy4, *QU::qu);
+
+  cl::sycl::free(d_muz1, *QU::qu);
+  cl::sycl::free(d_muz2, *QU::qu);
+  cl::sycl::free(d_muz3, *QU::qu);
+  cl::sycl::free(d_muz4, *QU::qu);
+#endif
+/*  for (int x=k1; x < k2+1;x++)
+    for (int y=jfirst+2; y<jlast-1; y++)
+      for(int z=ifirst+2; z < ilast-1; z++) {
+        if (z % 200 == 0)
+          std::cout << "After: lu1=" << lu(1,z,y,x) << "\tlu2=" << lu(2,z,y,x) << "\tlu3=" << lu(3,z,y,x) << std::endl;
+      }
+*/
       if( onesided[4]==1 )
       {
 	//std::cout<<"LOOP SET # 2\n";
-	PUSH_RANGE("RHS4SG_REV:2",3);
+	//PUSH_RANGE("RHS4SG_REV:2",3);
 RAJA::RangeSegment k_range(1,6+1);
 	RAJA::RangeSegment j_range(jfirst+2,jlast-1);
 	RAJA::RangeSegment i_range(ifirst+2,ilast-1);
@@ -741,12 +1526,13 @@ float_sw4 mux1, mux2, mux3, mux4,r1,r2,r3,muy1,muy2,muy3,muy4;
             lu(3,i,j,k) = a1*lu(3,i,j,k) + cof*r3;
 				    });
 	SYNC_DEVICE;
-	POP_RANGE;
+  QU::qu->wait();
+	//POP_RANGE;
       }
       if( onesided[5] == 1 )
       {
 	std::cout<<"Loop set #3 \n";
-	PUSH_RANGE("RHS4SG_REV:3",3);
+	//PUSH_RANGE("RHS4SG_REV:3",3);
 RAJA::RangeSegment k_range(nk-5,nk+1);
      RAJA::RangeSegment j_range(jfirst+2,jlast-1);
      RAJA::RangeSegment i_range(ifirst+2,ilast-1);
@@ -1008,9 +1794,16 @@ RAJA::RangeSegment k_range(nk-5,nk+1);
             lu(3,i,j,k) = a1*lu(3,i,j,k) + cof*r3;
 	       }); // END OF RAJA LOOP
 	SYNC_DEVICE;
-	POP_RANGE;
+  QU::qu->wait();
+	//POP_RANGE;
       }
    }
+/*  for (int x=k1; x < k2+1;x++)
+    for (int y=jfirst+2; y<jlast-1; y++)
+      for(int z=ifirst+2; z < ilast-1; z++) {
+        if (z % 200 == 0)
+          std::cout << "After: lu1=" << lu(1,z,y,x) << "\tlu2=" << lu(2,z,y,x) << "\tlu3=" << lu(3,z,y,x) << std::endl;
+      }*/
 #undef mu
 #undef la
 #undef u
@@ -1019,5 +1812,5 @@ RAJA::RangeSegment k_range(nk-5,nk+1);
 #undef stry
 #undef strz
    SYNC_DEVICE;
-   POP_RANGE;
+   //POP_RANGE;
 }

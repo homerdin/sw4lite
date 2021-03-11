@@ -7,12 +7,19 @@
 #endif
 using namespace RAJA;
 #if defined(CUDA_CODE)
+#include <CL/sycl.hpp>
+
+class QU {
+  public:
+    static cl::sycl::queue* qu;
+};
+#define RAJA_HOST_DEVICE SYCL_EXTERNAL
 //#include "cuda_runtime.h"
 //#include <nvml.h>
 //#include <cuda_profiler_api.h>
-void CheckError(cudaError_t const err, const char* file, char const* const fun, const int line);
+//void CheckError(cudaError_t const err, const char* file, char const* const fun, const int line);
 void prefetch_to_device(const float_sw4 *ptr);
-#define SW4_CheckDeviceError(err) CheckError(err,__FILE__, __FUNCTION__, __LINE__)
+//#define SW4_CheckDeviceError(err) CheckError(err,__FILE__, __FUNCTION__, __LINE__)
 #endif
 
 enum Space { Host, Managed,Device,Pinned,Managed_temps};

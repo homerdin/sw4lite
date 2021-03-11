@@ -117,7 +117,7 @@ void GridPointSource::initializeTimeFunction()
 {
    //   if( mTimeDependence != iDiscrete )
    //      mPar[0] = m_min_exponent;
-  switch(mTimeDependence)
+/*  switch(mTimeDependence)
     {
     case iRicker :
       mTimeFunc = RickerWavelet;
@@ -320,7 +320,7 @@ void GridPointSource::initializeTimeFunction()
      mTimeFunc_ttomom = Gaussian_ttomom;
      mTimeFunc_tom = Gaussian_tom;
      mTimeFunc_omom = Gaussian_omom;
-  }
+  }*/
 }
 
 //-----------------------------------------------------------------------
@@ -348,7 +348,15 @@ void GridPointSource::getFxyz( float_sw4 t, float_sw4* fxyz ) const
       pos += size;
       afunv[5] = mTimeFunc(mFreq,t-mT0,mPar+pos, mNpar, mIpar, mNipar );
    }
-      
+
+/*  std::cout << "afun     = " << afun
+            << "afunv[0] = " << afunv[0]
+            << "afunv[0] = " << afunv[1]
+            << "afunv[0] = " << afunv[2]
+            << "afunv[0] = " << afunv[3]
+            << "afunv[0] = " << afunv[4]
+            << "afunv[0] = " << afunv[5] << std::endl;
+*/      
   if( m_derivative==-1)
   {
      if( mTimeDependence != iDiscrete6moments )

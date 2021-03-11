@@ -469,6 +469,9 @@ class EW
    void getbuffer_device(float_sw4 *data, float_sw4* buf, std::tuple<int,int,int> &mtype );
    void putbuffer_device(float_sw4 *data, float_sw4* buf, std::tuple<int,int,int> &mtype );
    size_t memsize(void *ptr){ return map[ptr];}
+#ifdef CUDA_CODE
+  static cl::sycl::queue qu;
+#endif
  private:
    std::unordered_map<void*,size_t> map;
    std::unordered_map<void*,bool> prefetched;

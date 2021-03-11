@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <algorithm>
 #include <cmath>
+#include <fenv.h>
 
 #include "Source.h"
 #include "GridPointSource.h"
@@ -189,8 +190,12 @@ EW::EW( const string& filename ) :
    MPI_Comm_size( MPI_COMM_WORLD, &m_nprocs );
 
 #ifdef CUDA_CODE
+//feenableexcept(FE_INVALID | FE_OVERFLOW);
+   QU::qu = new cl::sycl::queue();
+   RAJA::sycl::detail::setQueue(QU::qu);
    m_iop = newmanaged(5+5+24+5+384+24+48+6+4);
-   memset(m_iop,0,sizeof(float_sw4)*(5+5+24+5+384+24+48+6+4));
+   auto e = QU::qu->memset(m_iop,0,sizeof(float_sw4)*(5+5+24+5+384+24+48+6+4));
+   e.wait();
    m_iop2 = m_iop+5;
    m_bop2 = m_iop2+5;
    m_sbop = m_bop2+24;
@@ -453,7 +458,7 @@ void EW::processGrid( char* buffer )
    zprime = (nzprime-1)*h;
    yprime = (nyprime-1)*h;
   
-   float_sw4 eps = 1.e-9*sqrt(xprime*xprime+yprime*yprime+zprime*zprime);
+   float_sw4 eps = 1.e-9*cl::sycl::sqrt(xprime*xprime+yprime*yprime+zprime*zprime);
   
    if (fabs(xprime-x) > eps && m_myrank == 0)
       cout << "* Changing x from " << x << " to " << xprime << " to be consistent with h=" << h << endl;
@@ -894,7 +899,7 @@ void EW::processTestPointSource(char* buffer)
 {
    char* token = strtok(buffer, " \t");
    token = strtok(NULL, " \t");
-   float_sw4 cs = 1.0, rho=1.0, cp=sqrt(3.0);
+   float_sw4 cs = 1.0, rho=1.0, cp=cl::sycl::sqrt(3.0);
    bool free_surface=false;
    while (token != NULL)
    {
@@ -2504,7 +2509,7 @@ void EW::timesteploop( vector<Sarray>& U, vector<Sarray>& Um )
 // Begin time stepping loop
    for( int currentTimeStep = beginCycle; currentTimeStep <= mNumberOfTimeSteps; currentTimeStep++ )
    {    
-     PUSH_RANGE("TIME STEP",0);
+     //PUSH_RANGE("TIME STEP",0);
       time_measure[0] = MPI_Wtime();
       // Predictor 
       // Need U on device for evalRHS,
@@ -2533,12 +2538,12 @@ void EW::timesteploop( vector<Sarray>& U, vector<Sarray>& Um )
       time_measure[1] = MPI_Wtime();
 
 // evaluate right hand side
-      PUSH_RANGE("evalRHS",2);
+      //PUSH_RANGE("evalRHS",2);
       if( m_cuobj->has_gpu() )
 	 evalRHSCU( U, mMu, mLambda, Lu, 0 ); // save Lu in composite grid 'Lu'
       else
 	 evalRHS( U, mMu, mLambda, Lu ); // save Lu in composite grid 'Lu'
-      POP_RANGE;
+      //POP_RANGE;
       if( m_checkfornan )
 #ifdef SW4_CUDA
 	 check_for_nan_GPU( Lu, 1, "Lu pred. " );
@@ -2596,36 +2601,36 @@ void EW::timesteploop( vector<Sarray>& U, vector<Sarray>& Um )
       //	    Up[g].copy_to_device(m_cuobj,true,0);
 
       // Corrector
-      PUSH_RANGE("ForceOffload",3);
+      //PUSH_RANGE("ForceOffload",3);
       if( m_cuobj->has_gpu() )
 	 ForceCU( t, dev_F, true, 1 );
       else
 	ForceOffload( t, F, m_point_sources, true );
-      POP_RANGE;
+      //POP_RANGE;
       //      for( int g=0; g < mNumberOfGrids ; g++ )
       //	 F[g].copy_to_device(m_cuobj,true,1);
 
       //      time_measure[4] = MPI_Wtime();
       time_measure[5] = MPI_Wtime();
 
-      PUSH_RANGE("evalDpDmInTIme",0);
+      //PUSH_RANGE("evalDpDmInTIme",0);
       if( m_cuobj->has_gpu() )
 	 evalDpDmInTimeCU( Up, U, Um, Uacc, 0 ); // store result in Uacc
       else
 	 evalDpDmInTime( Up, U, Um, Uacc ); // store result in Uacc
-      POP_RANGE;
+      //POP_RANGE;
       if( m_checkfornan )
 #ifdef SW4_CUDA
 	 check_for_nan_GPU( Uacc, 1, "uacc " );
 #else
 	 check_for_nan( Uacc, 1, "uacc " );
 #endif      
-      PUSH_RANGE("evalRHS-2",1);
+      //PUSH_RANGE("evalRHS-2",1);
       if( m_cuobj->has_gpu() )
 	 evalRHSCU( Uacc, mMu, mLambda, Lu, 0 );
       else
        	 evalRHS( Uacc, mMu, mLambda, Lu );
-      POP_RANGE;
+      //POP_RANGE;
       if( m_checkfornan )
 #ifdef SW4_CUDA
 	 check_for_nan_GPU( Lu, 1, "L(uacc) " );
@@ -2642,7 +2647,7 @@ void EW::timesteploop( vector<Sarray>& U, vector<Sarray>& Um )
       time_measure[6] = MPI_Wtime();
 
       // add in super-grid damping terms
-      PUSH_RANGE("addSuperGridDamping",3);
+      //PUSH_RANGE("addSuperGridDamping",3);
       if ( m_use_supergrid )
       {
 	 if( m_cuobj->has_gpu() )
@@ -2651,7 +2656,7 @@ void EW::timesteploop( vector<Sarray>& U, vector<Sarray>& Um )
 	    addSuperGridDamping( Up, U, Um, mRho );
 
       }
-      POP_RANGE;
+      //POP_RANGE;
       //      if( !(m_cuobj->has_gpu()) )
       //         for( int g=0; g < mNumberOfGrids ; g++ )
       //	    Up[g].copy_from_device(m_cuobj,true,1);
@@ -2754,9 +2759,9 @@ void EW::timesteploop( vector<Sarray>& U, vector<Sarray>& Um )
 	 exactSol( t, Up, m_globalUniqueSources ); // store exact solution in Up
 //	 //	 if (m_lamb_test)
 //	 //	    normOfSurfaceDifference( Up, U, errInf, errL2, solInf, solL2, a_Sources);
-	 PUSH_RANGE("NormOfDiff",1);
+	 //PUSH_RANGE("NormOfDiff",1);
 	 normOfDifference( Up, U, errInf, errL2, solInf, m_globalUniqueSources );
-	 POP_RANGE;
+	 //POP_RANGE;
          if ( m_myrank == 0 )
 	    cout << t << " " << errInf << " " << errL2 << " " << solInf << endl;
       }
@@ -2779,7 +2784,7 @@ void EW::timesteploop( vector<Sarray>& U, vector<Sarray>& Um )
       if( m_save_trace )
 	 for( int s = 0 ; s < 12 ; s++ )
 	    trdata[s+12*(currentTimeStep-beginCycle)]= time_measure[s];
-      POP_RANGE;
+      //POP_RANGE;
    } // end time stepping loop
    double time_end_solve = MPI_Wtime();
    print_execution_time( time_start_solve, time_end_solve, "solver phase" );
@@ -3061,11 +3066,13 @@ void EW::ForceOffload(float_sw4 a_t, vector<Sarray> & a_F, vector<GridPointSourc
   static int firstcall=1;
   if (firstcall){
     //SW4_CheckDeviceError(cudaPeekAtLastError());
-    PUSH_RANGE("ForceOffload::FirstCall",3);
+    //PUSH_RANGE("ForceOffload::FirstCall",3);
 #ifdef CUDA_CODE
-    SW4_CheckDeviceError(cudaMallocManaged(&GPS,sizeof(GridPointSource*)*(point_sources.size()+1),cudaMemAttachGlobal));
-    SW4_CheckDeviceError(cudaMallocManaged(&idnts,sizeof(int)*(m_identsources.size()+1),cudaMemAttachGlobal));
-    SW4_CheckDeviceError(cudaPeekAtLastError());
+//    SW4_CheckDeviceError(cudaMallocManaged(&GPS,sizeof(GridPointSource*)*(point_sources.size()+1),cudaMemAttachGlobal));
+//    SW4_CheckDeviceError(cudaMallocManaged(&idnts,sizeof(int)*(m_identsources.size()+1),cudaMemAttachGlobal));
+//    SW4_CheckDeviceError(cudaPeekAtLastError());
+    GPS = (GridPointSource**) cl::sycl::malloc_shared(sizeof(GridPointSource*)*(point_sources.size()+1), *QU::qu);
+    idnts = (int*) cl::sycl::malloc_shared(sizeof(int)*(m_identsources.size()+1), *QU::qu);
 #else
     GPS = new GridPointSource*[point_sources.size()+1];
     idnts = new int[m_identsources.size()+1];
@@ -3106,19 +3113,19 @@ void EW::ForceOffload(float_sw4 a_t, vector<Sarray> & a_F, vector<GridPointSourc
 	//PrintPointerAttributes(fptr+ind1+oc);
 	//PrintPointerAttributes(fptr+ind1+2*oc);
       }
-    POP_RANGE;
+    //POP_RANGE;
     firstcall=0;
   } // First call only ends
   
-  PUSH_RANGE("ForceOffload::set_to_zero",4);
+  //PUSH_RANGE("ForceOffload::set_to_zero",4);
   //std::cout<<"NUMBER OF GRIDS "<<mNumberOfGrids<<"\n";
   //for( int g =0 ; g < mNumberOfGrids ; g++ ) std::cout<<g<<",";
   //std::cout<<"\n";
   for( int g =0 ; g < mNumberOfGrids ; g++ )
     a_F[g].set_to_zero();
-  POP_RANGE;
+  //POP_RANGE;
 #ifdef ON_HOST
-  PUSH_RANGE("ForceOffload:;HostCalc",5);
+  //PUSH_RANGE("ForceOffload:;HostCalc",5);
   //std::cout<<"PA SIZE "<<m_identsources.size()-1<<"\n";
 #pragma omp parallel for
   for( int r=0 ; r<m_identsources.size()-1 ; r++ )
@@ -3157,12 +3164,12 @@ void EW::ForceOffload(float_sw4 a_t, vector<Sarray> & a_F, vector<GridPointSourc
 	  //	a_F[g](3,point_sources[s]->m_i0,point_sources[s]->m_j0,point_sources[s]->m_k0) += fxyz[2];
 	}
     }
-  POP_RANGE;
+  //POP_RANGE;
 #else
   GridPointSource **GPSL = GPS;
   int *idnts_local=idnts;
 #ifdef CUDA_CODE
-  typedef RAJA::cuda_exec<32,false> FORCE_LOOP_ASYNC;
+  typedef RAJA::sycl_exec<256> FORCE_LOOP_ASYNC;
 #else
   typedef RAJA::omp_parallel_for_exec FORCE_LOOP_ASYNC;
 #endif
@@ -3318,7 +3325,7 @@ void EW::evalDpDmInTime(vector<Sarray> & a_Up, vector<Sarray> & a_U, vector<Sarr
 void EW::evalRHS(vector<Sarray> & a_U, vector<Sarray>& a_Mu, vector<Sarray>& a_Lambda,
 		 vector<Sarray> & a_Uacc )
 {
-  PUSH_RANGE("evalRHS",3);
+  //PUSH_RANGE("evalRHS",3);
    for(int g=0 ; g<mNumberOfCartesianGrids; g++ )
    {
      a_U[g].prefetch();
@@ -3431,7 +3438,7 @@ void EW::evalRHS(vector<Sarray> & a_U, vector<Sarray>& a_Mu, vector<Sarray>& a_L
 					      &op );
 #endif
    }
-   POP_RANGE;
+   //POP_RANGE;
 }
 void EW::communicate_array( Sarray& u, int grid )
 {
@@ -3444,7 +3451,7 @@ void EW::communicate_array( Sarray& u, int grid )
 //-----------------------------------------------------------------------
 void EW::communicate_array_org( Sarray& u, int grid )
 {
-  PUSH_RANGE("COMM_ARRAY",4);
+  //PUSH_RANGE("COMM_ARRAY",4);
   //u.prefetch(cudaCpuDeviceId);
    REQUIRE2( u.m_nc == 1 || u.m_nc == 3 || u.m_nc == 4,
 	     "Communicate array, only implemented for nc=1,3, and 4 "
@@ -3517,12 +3524,12 @@ void EW::communicate_array_org( Sarray& u, int grid )
 		    m_cartesian_communicator, &status );
    }
    u.prefetch();
-   POP_RANGE;
+   //POP_RANGE;
 }
 
 void EW::communicate_array_async(Sarray& u, int grid )
 {
-  PUSH_RANGE("COMM_ARRAY",4);
+  //PUSH_RANGE("COMM_ARRAY",4);
   //u.prefetch(cudaCpuDeviceId);
    REQUIRE2( u.m_nc == 1 || u.m_nc == 3 || u.m_nc == 4,
 	     "Communicate array, only implemented for nc=1,3, and 4 "
@@ -3637,7 +3644,7 @@ void EW::communicate_array_async(Sarray& u, int grid )
       }
    }
    //u.prefetch();
-   POP_RANGE;
+   //POP_RANGE;
 }
 
 
@@ -3649,7 +3656,7 @@ void EW::communicate_array_new( Sarray& u, int grid )
   // can be diplicated by calling this twice, for example.
   // DO NOT USE FOR THE TIME BEING 
   
-  PUSH_RANGE("COMM_ARRAY_SPLIT",4);
+  //PUSH_RANGE("COMM_ARRAY_SPLIT",4);
   //u.prefetch(cudaCpuDeviceId);
    REQUIRE2( u.m_nc == 1 || u.m_nc == 3 || u.m_nc == 4,
 	     "Communicate array, only implemented for nc=1,3, and 4 "
@@ -3743,7 +3750,7 @@ void EW::communicate_array_new( Sarray& u, int grid )
       AMPI_SendrecvSync(list);
    }
    //u.prefetch();
-   POP_RANGE;
+   //POP_RANGE;
 }
 
 //-----------------------------------------------------------------------
@@ -3885,7 +3892,7 @@ void EW::enforceBC( vector<Sarray> & a_U, vector<Sarray>& a_Mu, vector<Sarray>& 
    float_sw4 om=0, ph=0, cv=0;
    for(int g=0 ; g<mNumberOfGrids; g++ )
    {
-     PUSH_RANGE("enforceBC::PREFETCH",1);
+     //PUSH_RANGE("enforceBC::PREFETCH",1);
      a_U[g].prefetch();
      a_Mu[g].prefetch();
      a_Lambda[g].prefetch();
@@ -3893,7 +3900,7 @@ void EW::enforceBC( vector<Sarray> & a_U, vector<Sarray>& a_Mu, vector<Sarray>& 
      PREFETCH(m_sg_str_y[g]);
      for(int j=0;j<6;j++)
        PREFETCH(a_BCForcing[g][j]);
-     POP_RANGE;
+     //POP_RANGE;
       //      int topo=topographyExists() && g == mNumberOfGrids-1;
 #ifdef SW4_CROUTINES
       if( m_corder )
@@ -4133,12 +4140,13 @@ bool EW::exactSol( float_sw4 a_t, vector<Sarray> & a_U, vector<Source*>& sources
 // smooth wave for time dependence to test point force term with 
 RAJA_HOST_DEVICE float_sw4 EW::SmoothWave(float_sw4 t, float_sw4 R, float_sw4 c)
 {
+  using cl::sycl::pow;
   float_sw4 temp = R;
   float_sw4 c0 = 2187./8., c1 = -10935./8., c2 = 19683./8., c3 = -15309./8., c4 = 2187./4.;
 
-  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (c0*pow(t-R/c,3)+c1*pow(t-R/c,4)+c2*pow(t-R/c,5)+c3*pow(t-R/c,6)+c4*pow(t-R/c,7)), 0);
+  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (c0*cl::sycl::pow(t-R/c,3.)+c1*cl::sycl::pow(t-R/c,4.)+c2*cl::sycl::pow(t-R/c,5.)+c3*cl::sycl::pow(t-R/c,6.)+c4*cl::sycl::pow(t-R/c,7.)), 0);
   if( (t-R/c) > 0 && (t-R/c) < 1 )
-     temp = (c0*pow(t-R/c,3)+c1*pow(t-R/c,4)+c2*pow(t-R/c,5)+c3*pow(t-R/c,6)+c4*pow(t-R/c,7));
+     temp = (c0*cl::sycl::pow(t-R/c,3.)+c1*cl::sycl::pow(t-R/c,4.)+c2*cl::sycl::pow(t-R/c,5.)+c3*cl::sycl::pow(t-R/c,6.)+c4*cl::sycl::pow(t-R/c,7.));
   else
      temp = 0;
   return temp;
@@ -4148,12 +4156,13 @@ RAJA_HOST_DEVICE float_sw4 EW::SmoothWave(float_sw4 t, float_sw4 R, float_sw4 c)
 // very smooth bump for time dependence for further testing of point force 
 RAJA_HOST_DEVICE float_sw4 EW::VerySmoothBump(float_sw4 t, float_sw4 R, float_sw4 c)
 {
+  using cl::sycl::pow;
   float_sw4 temp = R;
   float_sw4 c0 = 1024, c1 = -5120, c2 = 10240, c3 = -10240, c4 = 5120, c5 = -1024;
 
-  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (c0*pow(t-R/c,5)+c1*pow(t-R/c,6)+c2*pow(t-R/c,7)+c3*pow(t-R/c,8)+c4*pow(t-R/c,9)+c5*pow(t-R/c,10)), 0);
+  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (c0*cl::sycl::pow(t-R/c,5.)+c1*cl::sycl::pow(t-R/c,6.)+c2*cl::sycl::pow(t-R/c,7.)+c3*cl::sycl::pow(t-R/c,8.)+c4*cl::sycl::pow(t-R/c,9.)+c5*cl::sycl::pow(t-R/c,10.)), 0);
   if( (t-R/c) > 0 && (t-R/c) < 1 )
-     temp = (c0*pow(t-R/c,5)+c1*pow(t-R/c,6)+c2*pow(t-R/c,7)+c3*pow(t-R/c,8)+c4*pow(t-R/c,9)+c5*pow(t-R/c,10));
+     temp = (c0*cl::sycl::pow(t-R/c,5.)+c1*cl::sycl::pow(t-R/c,6.)+c2*cl::sycl::pow(t-R/c,7.)+c3*cl::sycl::pow(t-R/c,8.)+c4*cl::sycl::pow(t-R/c,9.)+c5*cl::sycl::pow(t-R/c,10.));
   else
      temp = 0;
   return temp;
@@ -4163,9 +4172,10 @@ RAJA_HOST_DEVICE float_sw4 EW::VerySmoothBump(float_sw4 t, float_sw4 R, float_sw
 // C6 smooth bump for time dependence for further testing of point force 
 RAJA_HOST_DEVICE float_sw4 EW::C6SmoothBump(float_sw4 t, float_sw4 R, float_sw4 c)
 {
+  using cl::sycl::pow;
   float_sw4 retval = 0;
   if( (t-R/c) > 0 && (t-R/c) < 1 )
-     retval = 51480.0*pow( (t-R/c)*(1-t+R/c), 7 );
+     retval = 51480.0*cl::sycl::pow( (t-R/c)*(1-t+R/c), 7. );
   return retval;
 }
 
@@ -4173,12 +4183,13 @@ RAJA_HOST_DEVICE float_sw4 EW::C6SmoothBump(float_sw4 t, float_sw4 R, float_sw4 
 // derivative of smooth wave 
 RAJA_HOST_DEVICE float_sw4 EW::d_SmoothWave_dt(float_sw4 t, float_sw4 R, float_sw4 c)
 {
+  using cl::sycl::pow;
   float_sw4 temp = R;
   float_sw4 c0 = 2187./8., c1 = -10935./8., c2 = 19683./8., c3 = -15309./8., c4 = 2187./4.;
 
-  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (3*c0*pow(t-R/c,2)+4*c1*pow(t-R/c,3)+5*c2*pow(t-R/c,4)+6*c3*pow(t-R/c,5)+7*c4*pow(t-R/c,6)), 0);
+  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (3*c0*cl::sycl::pow(t-R/c,2.)+4*c1*cl::sycl::pow(t-R/c,3.)+5*c2*cl::sycl::pow(t-R/c,4.)+6*c3*cl::sycl::pow(t-R/c,5.)+7*c4*cl::sycl::pow(t-R/c,6.)), 0);
   if( (t-R/c) > 0 && (t-R/c) < 1 )
-     temp = (3*c0*pow(t-R/c,2)+4*c1*pow(t-R/c,3)+5*c2*pow(t-R/c,4)+6*c3*pow(t-R/c,5)+7*c4*pow(t-R/c,6));
+     temp = (3*c0*cl::sycl::pow(t-R/c,2.)+4*c1*cl::sycl::pow(t-R/c,3.)+5*c2*cl::sycl::pow(t-R/c,4.)+6*c3*cl::sycl::pow(t-R/c,5.)+7*c4*cl::sycl::pow(t-R/c,6.));
   else
      temp = 0;
   return temp;
@@ -4188,12 +4199,13 @@ RAJA_HOST_DEVICE float_sw4 EW::d_SmoothWave_dt(float_sw4 t, float_sw4 R, float_s
 // very smooth bump for time dependence to further testing of point force 
 RAJA_HOST_DEVICE float_sw4 EW::d_VerySmoothBump_dt(float_sw4 t, float_sw4 R, float_sw4 c)
 {
+  using cl::sycl::pow;
   float_sw4 temp = R;
   float_sw4 c0 = 1024, c1 = -5120, c2 = 10240, c3 = -10240, c4 = 5120, c5 = -1024;
 
-  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (5*c0*pow(t-R/c,4)+6*c1*pow(t-R/c,5)+7*c2*pow(t-R/c,6)+8*c3*pow(t-R/c,7)+9*c4*pow(t-R/c,8))+10*c5*pow(t-R/c,9), 0);
+  //  temp = where ( (t-R/c) > 0 && (t-R/c) < 1, (5*c0*cl::sycl::pow(t-R/c,4.)+6*c1*cl::sycl::pow(t-R/c,5.)+7*c2*cl::sycl::pow(t-R/c,6.)+8*c3*cl::sycl::pow(t-R/c,7.)+9*c4*cl::sycl::pow(t-R/c,8.))+10*c5*cl::sycl::pow(t-R/c,9.), 0);
   if( (t-R/c) > 0 && (t-R/c) < 1 )
-     temp = (5*c0*pow(t-R/c,4)+6*c1*pow(t-R/c,5)+7*c2*pow(t-R/c,6)+8*c3*pow(t-R/c,7)+9*c4*pow(t-R/c,8))+10*c5*pow(t-R/c,9);
+     temp = (5*c0*cl::sycl::pow(t-R/c,4.)+6*c1*cl::sycl::pow(t-R/c,5.)+7*c2*cl::sycl::pow(t-R/c,6.)+8*c3*cl::sycl::pow(t-R/c,7.)+9*c4*cl::sycl::pow(t-R/c,8.))+10*c5*cl::sycl::pow(t-R/c,9.);
   else
      temp = 0;
   return temp;
@@ -4203,9 +4215,10 @@ RAJA_HOST_DEVICE float_sw4 EW::d_VerySmoothBump_dt(float_sw4 t, float_sw4 R, flo
 // C6 smooth bump for time dependence to further testing of point force 
 RAJA_HOST_DEVICE float_sw4 EW::d_C6SmoothBump_dt(float_sw4 t, float_sw4 R, float_sw4 c)
 {
+  using cl::sycl::pow;
   float_sw4 retval=0;
   if( (t-R/c) > 0 && (t-R/c) < 1 )
-     retval = 51480.0*7*(1-2*(t-R/c))*pow((t-R/c)*(1-t+R/c),6);
+     retval = 51480.0*7*(1-2*(t-R/c))*cl::sycl::pow((t-R/c)*(1-t+R/c),6.);
   return retval;
 }
 
@@ -4213,16 +4226,17 @@ RAJA_HOST_DEVICE float_sw4 EW::d_C6SmoothBump_dt(float_sw4 t, float_sw4 R, float
 // Primitive function (for T) of SmoothWave(t-T)*T
 RAJA_HOST_DEVICE float_sw4 EW::SWTP(float_sw4 Lim, float_sw4 t)
 {
+  using cl::sycl::pow;
   float_sw4 temp = Lim;
 
   float_sw4 c0 = 2187./8., c1 = -10935./8., c2 = 19683./8., c3 = -15309./8., c4 = 2187./4.;
 
-  temp = (pow(t,3)*(c0 + c1*t + c2*pow(t,2) + c3*pow(t,3) + c4*pow(t,4))*pow(Lim,2))/2. - 
-    (pow(t,2)*(3*c0 + 4*c1*t + 5*c2*pow(t,2) + 6*c3*pow(t,3) + 7*c4*pow(t,4))*pow(Lim,3))/3. + 
-    (t*(3*c0 + 6*c1*t + 10*c2*pow(t,2) + 15*c3*pow(t,3) + 21*c4*pow(t,4))*pow(Lim,4))/4. + 
-    ((-c0 - 4*c1*t - 10*c2*pow(t,2) - 20*c3*pow(t,3) - 35*c4*pow(t,4))*pow(Lim,5))/5. + 
-    ((c1 + 5*c2*t + 15*c3*pow(t,2) + 35*c4*pow(t,3))*pow(Lim,6))/6. + 
-    ((-c2 - 6*c3*t - 21*c4*pow(t,2))*pow(Lim,7))/7. + ((c3 + 7*c4*t)*pow(Lim,8))/8. - (c4*pow(Lim,9))/9.;
+  temp = (cl::sycl::pow(t,3.)*(c0 + c1*t + c2*cl::sycl::pow(t,2.) + c3*cl::sycl::pow(t,3.) + c4*cl::sycl::pow(t,4.))*cl::sycl::pow(Lim,2.))/2. - 
+    (cl::sycl::pow(t,2.)*(3*c0 + 4*c1*t + 5*c2*cl::sycl::pow(t,2.) + 6*c3*cl::sycl::pow(t,3.) + 7*c4*cl::sycl::pow(t,4.))*cl::sycl::pow(Lim,3.))/3. + 
+    (t*(3*c0 + 6*c1*t + 10*c2*cl::sycl::pow(t,2.) + 15*c3*cl::sycl::pow(t,3.) + 21*c4*cl::sycl::pow(t,4.))*cl::sycl::pow(Lim,4.))/4. + 
+    ((-c0 - 4*c1*t - 10*c2*cl::sycl::pow(t,2.) - 20*c3*cl::sycl::pow(t,3.) - 35*c4*cl::sycl::pow(t,4.))*cl::sycl::pow(Lim,5.))/5. + 
+    ((c1 + 5*c2*t + 15*c3*cl::sycl::pow(t,2.) + 35*c4*cl::sycl::pow(t,3.))*cl::sycl::pow(Lim,6.))/6. + 
+    ((-c2 - 6*c3*t - 21*c4*cl::sycl::pow(t,2.))*cl::sycl::pow(Lim,7.))/7. + ((c3 + 7*c4*t)*cl::sycl::pow(Lim,8.))/8. - (c4*cl::sycl::pow(Lim,9.))/9.;
 
   return temp;
 }
@@ -4231,13 +4245,14 @@ RAJA_HOST_DEVICE float_sw4 EW::SWTP(float_sw4 Lim, float_sw4 t)
 // Primitive function (for T) of VerySmoothBump(t-T)*T
 RAJA_HOST_DEVICE float_sw4 EW::VSBTP(float_sw4 Lim, float_sw4 t)
 {
+  using cl::sycl::pow;
   float_sw4 temp = Lim;
   float_sw4 f = 1024., g = -5120., h = 10240., i = -10240., j = 5120., k = -1024.;
 
-  temp = (pow(Lim,11)*(-25200*k*t-2520*j)+2310*k*pow(Lim,12)+(124740*k*pow(t,2)
-							  +24948*j*t+2772*i)*pow(Lim,10)+(-369600*k*pow(t,3)-110880*j*pow(t,2)-24640*i*t-3080*h)*pow(Lim,9)+(727650*k*pow(t,4)+291060*j*pow(t,3)+97020*i*pow(t,2)+24255*h*t+3465*g)*pow(Lim,8)+(-997920*k*pow(t,5)-498960*j*pow(t,4)-221760*i*pow(t,3)-83160*h*pow(t,2)-23760*g*t-3960*f)*pow(Lim,7)+(970200*k*pow(t,6)+582120*j*pow(t,5)+323400*i*pow(t,4)+161700*h*pow(t,3)+69300*g*pow(t,2)+23100*f*t)*pow(Lim,6)+(-665280*k*pow(t,7)-465696*j*pow(t,6)-310464*i*pow(t,5)-194040*h*pow(t,4)-110880*g*pow(t,3)-55440*f*pow(t,2))*pow(Lim,5)+
-	  (311850*k*pow(t,8)+249480*j*pow(t,7)+194040*i*pow(t,6)+145530*h*pow(t,5)+103950*g*pow(t,4)+69300*f*pow(t,3))*pow(Lim,4)+(-92400*
-																   k*pow(t,9)-83160*j*pow(t,8)-73920*i*pow(t,7)-64680*h*pow(t,6)-55440*g*pow(t,5)-46200*f*pow(t,4))*pow(Lim,3)+(13860*k*pow(t,10)+13860*j*pow(t,9)+13860*i*pow(t,8)+13860*h*pow(t,7)+13860*g*pow(t,6)+13860*f*pow(t,5))*pow(Lim,2))/27720.0;
+  temp = (cl::sycl::pow(Lim,11.)*(-25200*k*t-2520*j)+2310*k*cl::sycl::pow(Lim,12.)+(124740*k*cl::sycl::pow(t,2.)
+							  +24948*j*t+2772*i)*cl::sycl::pow(Lim,10.)+(-369600*k*cl::sycl::pow(t,3.)-110880*j*cl::sycl::pow(t,2.)-24640*i*t-3080*h)*cl::sycl::pow(Lim,9.)+(727650*k*cl::sycl::pow(t,4.)+291060*j*cl::sycl::pow(t,3.)+97020*i*cl::sycl::pow(t,2.)+24255*h*t+3465*g)*cl::sycl::pow(Lim,8.)+(-997920*k*cl::sycl::pow(t,5.)-498960*j*cl::sycl::pow(t,4.)-221760*i*cl::sycl::pow(t,3.)-83160*h*cl::sycl::pow(t,2.)-23760*g*t-3960*f)*cl::sycl::pow(Lim,7.)+(970200*k*cl::sycl::pow(t,6.)+582120*j*cl::sycl::pow(t,5.)+323400*i*cl::sycl::pow(t,4.)+161700*h*cl::sycl::pow(t,3.)+69300*g*cl::sycl::pow(t,2.)+23100*f*t)*cl::sycl::pow(Lim,6.)+(-665280*k*cl::sycl::pow(t,7.)-465696*j*cl::sycl::pow(t,6.)-310464*i*cl::sycl::pow(t,5.)-194040*h*cl::sycl::pow(t,4.)-110880*g*cl::sycl::pow(t,3.)-55440*f*cl::sycl::pow(t,2.))*cl::sycl::pow(Lim,5.)+
+	  (311850*k*cl::sycl::pow(t,8.)+249480*j*cl::sycl::pow(t,7.)+194040*i*cl::sycl::pow(t,6.)+145530*h*cl::sycl::pow(t,5.)+103950*g*cl::sycl::pow(t,4.)+69300*f*cl::sycl::pow(t,3.))*cl::sycl::pow(Lim,4.)+(-92400*
+																   k*cl::sycl::pow(t,9.)-83160*j*cl::sycl::pow(t,8.)-73920*i*cl::sycl::pow(t,7.)-64680*h*cl::sycl::pow(t,6.)-55440*g*cl::sycl::pow(t,5.)-46200*f*cl::sycl::pow(t,4.))*cl::sycl::pow(Lim,3.)+(13860*k*cl::sycl::pow(t,10.)+13860*j*cl::sycl::pow(t,9.)+13860*i*cl::sycl::pow(t,8.)+13860*h*cl::sycl::pow(t,7.)+13860*g*cl::sycl::pow(t,6.)+13860*f*cl::sycl::pow(t,5.))*cl::sycl::pow(Lim,2.))/27720.0;
 
   return temp;
 }
@@ -4245,9 +4260,10 @@ RAJA_HOST_DEVICE float_sw4 EW::VSBTP(float_sw4 Lim, float_sw4 t)
 // Primitive function (for T) of C6SmoothBump(t-T)*T
 RAJA_HOST_DEVICE float_sw4 EW::C6SBTP(float_sw4 Lim, float_sw4 t)
 {
+  using cl::sycl::pow;
   float_sw4 x = t-Lim;
-  return pow(x,8)*(-3217.5*pow(x,8)+3432.0*(7+t)*pow(x,7)-25740.0*(3+t)*pow(x,6)
-		   +27720.0*(5+3*t)*pow(x,5)-150150.0*(t+1)*x*x*x*x +
+  return cl::sycl::pow(x,8.)*(-3217.5*cl::sycl::pow(x,8.)+3432.0*(7+t)*cl::sycl::pow(x,7.)-25740.0*(3+t)*cl::sycl::pow(x,6.)
+		   +27720.0*(5+3*t)*cl::sycl::pow(x,5.)-150150.0*(t+1)*x*x*x*x +
 		   32760.0*(3+5*t)*x*x*x-36036.0*(1+3*t)*x*x+5720.0*(1+7*t)*x-6435.0*t);
 }
 
@@ -4333,8 +4349,10 @@ RAJA_HOST_DEVICE float_sw4 EW::C6SmoothBump_x_T_Integral(float_sw4 t, float_sw4 
 //-----------------------------------------------------------------------
 RAJA_HOST_DEVICE float_sw4 EW::Gaussian(float_sw4 t, float_sw4 R, float_sw4 c, float_sw4 f )
 {
+  using cl::sycl::pow;
+  using cl::sycl::sqrt;
   float_sw4 temp = R;
-  temp = 1 /(f* sqrt(2*M_PI))*exp(-pow(t-R/c,2) / (2*f*f));
+  temp = 1 /(f* cl::sycl::sqrt(2*M_PI))*cl::sycl::exp(-cl::sycl::pow(t-R/c,2.) / (2*f*f));
   return temp;
 }
 
@@ -4342,19 +4360,23 @@ RAJA_HOST_DEVICE float_sw4 EW::Gaussian(float_sw4 t, float_sw4 R, float_sw4 c, f
 RAJA_HOST_DEVICE float_sw4 EW::d_Gaussian_dt(float_sw4 t, float_sw4 R, float_sw4 c, float_sw4 f)
 {
   float_sw4 temp = R;
-  temp = 1 /(f* sqrt(2*M_PI))*(-exp(-pow(t-R/c,2)/(2*f*f))*(t-R/c))/pow(f,2);
+  temp = 1 /(f* cl::sycl::sqrt(2*M_PI))*(-cl::sycl::exp(-cl::sycl::pow(t-R/c,2.)/(2*f*f))*(t-R/c))/cl::sycl::pow(f,2.);
   return temp;
 }
 
 //-----------------------------------------------------------------------
 RAJA_HOST_DEVICE float_sw4 EW::Gaussian_x_T_Integral(float_sw4 t, float_sw4 R, float_sw4 f, float_sw4 alpha, float_sw4 beta)
 {
+  using cl::sycl::pow;
+  using cl::sycl::erf;
+  using cl::sycl::sqrt;
+  using cl::sycl::exp;
   float_sw4 temp = R;
-  temp = -0.5*t*(erf( (t-R/beta)/(sqrt(2.0)*f))     - erf( (t-R/alpha)/(sqrt(2.0)*f)) ) -
-     f/sqrt(2*M_PI)*( exp(-pow(t-R/beta,2)/(2*f*f) ) - exp( -pow(t-R/alpha,2)/(2*f*f) )  ) ;
-     //  temp = 1/(f*sqrt(2*M_PI))*( f*f*(-exp(-pow(t-R/beta,2)/(2*f*f))+exp(-pow(t-R/alpha,2)/(2*f*f)) ) +
-     //	     t*0.5*sqrt(M_PI*2)*f*( erf((t-R/alpha)/(sqrt(2.0)*f)) - erf((t-R/beta)/(sqrt(2.0)*f)) ) );
-  //  temp = 1 /(f*sqrt(2*M_PI))*(f*( (-exp(-pow(t-R / alpha,2)/pow(f,2)) + exp(-pow(t-R / beta,2)/pow(f,2)) )*f + sqrt(M_PI)*t*(-erf((t-R / alpha) / f) + erf(R / beta / f))))/2.;
+  temp = -0.5*t*(erf( (t-R/beta)/(cl::sycl::sqrt(2.0)*f))     - erf( (t-R/alpha)/(cl::sycl::sqrt(2.0)*f)) ) -
+     f/cl::sycl::sqrt(2*M_PI)*( cl::sycl::exp(-cl::sycl::pow(t-R/beta,2.)/(2*f*f) ) - cl::sycl::exp( -cl::sycl::pow(t-R/alpha,2.)/(2*f*f) )  ) ;
+     //  temp = 1/(f*cl::sycl::sqrt(2*M_PI))*( f*f*(-cl::sycl::exp(-cl::sycl::pow(t-R/beta,2.)/(2*f*f))+cl::sycl::exp(-cl::sycl::pow(t-R/alpha,2.)/(2*f*f)) ) +
+     //	     t*0.5*cl::sycl::sqrt(M_PI*2)*f*( erf((t-R/alpha)/(cl::sycl::sqrt(2.0)*f)) - erf((t-R/beta)/(cl::sycl::sqrt(2.0)*f)) ) );
+  //  temp = 1 /(f*cl::sycl::sqrt(2*M_PI))*(f*( (-cl::sycl::exp(-cl::sycl::pow(t-R / alpha,2.)/cl::sycl::pow(f,2.)) + cl::sycl::exp(-cl::sycl::pow(t-R / beta,2.)/cl::sycl::pow(f,2.)) )*f + cl::sycl::sqrt(M_PI)*t*(-erf((t-R / alpha) / f) + erf(R / beta / f))))/2.;
   return temp;
 }
 
@@ -4385,8 +4407,8 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
    int jmid = (m_jStart[g]+m_jEnd[g])/2;
    int kmid = (m_kStart[g]+m_kEnd[g])/2;
    float_sw4 rho   = mRho[g](imid,jmid,kmid);
-   float_sw4 beta  =  sqrt( mMu[g](imid,jmid,kmid)/rho);
-   float_sw4 alpha =  sqrt( (2*mMu[g](imid,jmid,kmid)+mLambda[g](imid,jmid,kmid))/rho);
+   float_sw4 beta  =  cl::sycl::sqrt( mMu[g](imid,jmid,kmid)/rho);
+   float_sw4 alpha =  cl::sycl::sqrt( (2*mMu[g](imid,jmid,kmid)+mLambda[g](imid,jmid,kmid))/rho);
 
       //   double alpha = m_point_source_test->m_cp;
       //   double beta  = m_point_source_test->m_cs;
@@ -4459,7 +4481,10 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 			     [=]RAJA_DEVICE (int k,int j,int i) {
 
 
-
+  using cl::sycl::pow;
+  using cl::sycl::erf;
+  using cl::sycl::sqrt;
+  using cl::sycl::exp;
    // forallN<EXEC_CARTBC, int, int,int>(
    // 				  RangeSegment(kmin,kmax+1),
    // 				  RangeSegment(jmin,jmax+1),
@@ -4482,7 +4507,7 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 	    }
 	    if( !ismomentsource )
 	    {
-	       float_sw4 R = sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
+	       float_sw4 R = cl::sycl::sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
 	       if( R < eps )
 		  up[3*ind] = up[3*ind+1] = up[3*ind+2] = 0;
 	       else
@@ -4490,35 +4515,35 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		  float_sw4 A, B;
 		  if (tD == iSmoothWave)
 		  {
-		     A = ( 1/pow(alpha,2) * SmoothWave(time, fr*R, alpha) - 1/pow(beta,2) * SmoothWave(time, fr*R, beta) +
-			   3/pow(fr*R,2) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * SmoothWave(time, fr*R, alpha) - 1/cl::sycl::pow(beta,2.) * SmoothWave(time, fr*R, beta) +
+			   3/cl::sycl::pow(fr*R,2.) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 	  
-		     B = ( 1/pow(beta,2) * SmoothWave(time, fr*R, beta) -
-			   1/pow(fr*R,2) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * SmoothWave(time, fr*R, beta) -
+			   1/cl::sycl::pow(fr*R,2.) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
 		  else if (tD == iVerySmoothBump)
 		  {
-		     A = ( 1/pow(alpha,2) * VerySmoothBump(time, fr*R, alpha) - 1/pow(beta,2) * VerySmoothBump(time, fr*R, beta) +
-			   3/pow(fr*R,2) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * VerySmoothBump(time, fr*R, alpha) - 1/cl::sycl::pow(beta,2.) * VerySmoothBump(time, fr*R, beta) +
+			   3/cl::sycl::pow(fr*R,2.) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 		     
-		     B = ( 1/pow(beta,2) * VerySmoothBump(time, fr*R, beta) -
-			   1/pow(fr*R,2) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * VerySmoothBump(time, fr*R, beta) -
+			   1/cl::sycl::pow(fr*R,2.) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
 		  else if (tD == iC6SmoothBump)
 		  {
-		     A = ( 1/pow(alpha,2) * C6SmoothBump(time, fr*R, alpha) - 1/pow(beta,2) * C6SmoothBump(time, fr*R, beta) +
-			   3/pow(fr*R,2) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * C6SmoothBump(time, fr*R, alpha) - 1/cl::sycl::pow(beta,2.) * C6SmoothBump(time, fr*R, beta) +
+			   3/cl::sycl::pow(fr*R,2.) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 		     
-		     B = ( 1/pow(beta,2) * C6SmoothBump(time, fr*R, beta) -
-			   1/pow(fr*R,2) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * C6SmoothBump(time, fr*R, beta) -
+			   1/cl::sycl::pow(fr*R,2.) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
                   else if( tD == iGaussian )
 		  {
-		     A = ( 1/pow(alpha,2) * Gaussian(time, R, alpha,fr) - 1/pow(beta,2) * Gaussian(time, R, beta,fr) +
-			   3/pow(R,2) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * Gaussian(time, R, alpha,fr) - 1/cl::sycl::pow(beta,2.) * Gaussian(time, R, beta,fr) +
+			   3/cl::sycl::pow(R,2.) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 		     
-		     B = ( 1/pow(beta,2) * Gaussian(time, R, beta,fr) -
-			   1/pow(R,2) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * Gaussian(time, R, beta,fr) -
+			   1/cl::sycl::pow(R,2.) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
 		  up[3*ind]   = ( (x - x0)*(x - x0)*fx + (x - x0)*(y - y0)*fy + (x - x0)*(z - z0)*fz )*A + fx*B;
 		  up[3*ind+1] = ( (y - y0)*(x - x0)*fx + (y - y0)*(y - y0)*fy + (y - y0)*(z - z0)*fz )*A + fy*B;
@@ -4529,7 +4554,7 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 	    {
 	       up[3*ind] = up[3*ind+1] = up[3*ind+2] = 0;
 	       // Here, ismomentsource == true
-	       float_sw4 R = sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
+	       float_sw4 R = cl::sycl::sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
 	       if( R < eps )
 	       {
 		  up[3*ind] = up[3*ind+1] = up[3*ind+2] = 0;
@@ -4542,52 +4567,52 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     A = SmoothWave(time, R, alpha);
 		     B = SmoothWave(time, R, beta);
 		     C = SmoothWave_x_T_Integral(time, R, alpha, beta);
-		     D = d_SmoothWave_dt(time, R, alpha) / pow(alpha,3) / R;
-		     E = d_SmoothWave_dt(time, R, beta) / pow(beta,3) / R;
+		     D = d_SmoothWave_dt(time, R, alpha) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_SmoothWave_dt(time, R, beta) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  else if (tD == iVerySmoothBump)
 		  {
 		     A = VerySmoothBump(time, R, alpha);
 		     B = VerySmoothBump(time, R, beta);
 		     C = VerySmoothBump_x_T_Integral(time, R, alpha, beta);
-		     D = d_VerySmoothBump_dt(time, R, alpha) / pow(alpha,3) / R;
-		     E = d_VerySmoothBump_dt(time, R, beta) / pow(beta,3) / R;
+		     D = d_VerySmoothBump_dt(time, R, alpha) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_VerySmoothBump_dt(time, R, beta) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  else if (tD == iC6SmoothBump)
 		  {
 		     A = C6SmoothBump(time, R, alpha);
 		     B = C6SmoothBump(time, R, beta);
 		     C = C6SmoothBump_x_T_Integral(time, R, alpha, beta);
-		     D = d_C6SmoothBump_dt(time, R, alpha) / pow(alpha,3) / R;
-		     E = d_C6SmoothBump_dt(time, R, beta) / pow(beta,3) / R;
+		     D = d_C6SmoothBump_dt(time, R, alpha) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_C6SmoothBump_dt(time, R, beta) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  else if (tD == iGaussian)
 		  {
 		     A = Gaussian(time, R, alpha,fr);
 		     B = Gaussian(time, R, beta,fr);
 		     C = Gaussian_x_T_Integral(time, R, fr,alpha, beta);
-		     D = d_Gaussian_dt(time, R, alpha,fr) / pow(alpha,3) / R;
-		     E = d_Gaussian_dt(time, R, beta,fr) / pow(beta,3) / R;
+		     D = d_Gaussian_dt(time, R, alpha,fr) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_Gaussian_dt(time, R, beta,fr) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  up[3*ind] += 
 	// m_xx*G_xx,x
 		     + m0*mxx/(4*M_PI*rho)*
 		     ( 
-		      + 3*(x-x0)*(x-x0)*(x-x0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - 2*(x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - 2*(x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(x-x0)*(x-x0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(x-x0)*(x-x0)*(x-x0) / pow(R,7) - 6*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(x-x0) / cl::sycl::pow(R,7.) - 6*(x-x0) / cl::sycl::pow(R,5.) ) * C
 	 
-		      + (x-x0)*(x-x0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(x-x0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	 
-		      - 1 / pow(R,3) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(x-x0) / pow(R,5) * C
+		      - 3*(x-x0) / cl::sycl::pow(R,5.) * C
 
-		      + (x-x0) / (pow(R,3)*pow(beta,2)) * B
+		      + (x-x0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (x-x0)*E
 		      );
@@ -4595,61 +4620,61 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_yy*G_xy,y
 		     + m0*myy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(y-y0)*(y-y0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_zz*G_xz,z
 		     + m0*mzz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(z-z0)*(z-z0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_xy*G_xy,x
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_xy*G_xx,y
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(x-x0)*(x-x0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(x-x0)*(x-x0)*(y-y0) / pow(R,7) * C
+		      + 15*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (x-x0)*(x-x0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(x-x0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	 
-		      - 1 / pow(R,3) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(y-y0) / pow(R,5) * C
+		      - 3*(y-y0) / cl::sycl::pow(R,5.) * C
 
-		      + (y-y0) / (pow(R,3)*pow(beta,2)) * B
+		      + (y-y0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (y-y0)*E
 		      );
@@ -4657,45 +4682,45 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_xz*G_xz,x
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(z-z0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_yz*G_xz,y
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind] +=
 		     // m_xz*G_xx,z
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(x-x0)*(x-x0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(x-x0)*(x-x0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (x-x0)*(x-x0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(x-x0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	 
-		      - 1 / pow(R,3) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(z-z0) / pow(R,5) * C
+		      - 3*(z-z0) / cl::sycl::pow(R,5.) * C
 
-		      + (z-z0) / (pow(R,3)*pow(beta,2)) * B
+		      + (z-z0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (z-z0)*E
 		      );
@@ -4703,48 +4728,48 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_yz*G_yx,z
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  //------------------------------------------------------------
 		  up[3*ind+1] += 
 		     // m_xx*G_xy,x
 		     m0*mxx/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_yy**G_yy,y
 		     + m0*myy/(4*M_PI*rho)*
 		     ( 
-		      + 3*(y-y0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - 2*(y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - 2*(y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(y-y0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(y-y0)*(y-y0)*(y-y0) / pow(R,7) - 6*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(y-y0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 6*(y-y0) / cl::sycl::pow(R,5.) ) * C
 	 
-		      + (y-y0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (y-y0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	 
-		      - 1 / pow(R,3) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(y-y0) / pow(R,5) * C
+		      - 3*(y-y0) / cl::sycl::pow(R,5.) * C
 
-		      + (y-y0) / (pow(R,3)*pow(beta,2)) * B
+		      + (y-y0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (y-y0)*E
 		      );
@@ -4752,33 +4777,33 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_zz*G_zy,z
 		     + m0*mzz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(z-z0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (z-z0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (z-z0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(z-z0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(z-z0)*(z-z0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_xy*G_yy,x
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(y-y0)*(y-y0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(y-y0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) * C
 	  
-		      + (y-y0)*(y-y0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (y-y0)*(y-y0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	  
-		      - 1 / pow(R,3) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      - 3*(x-x0) / pow(R,5) * C
+		      - 3*(x-x0) / cl::sycl::pow(R,5.) * C
 	  
-		      + (x-x0) / (pow(R,3)*pow(beta,2)) * B
+		      + (x-x0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 	  
 		      + 1 / R * (x-x0)*E
 		      );
@@ -4786,71 +4811,71 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_xz*G_zy,x
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (y-y0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (y-y0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	  
-		      + 3*(y-y0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_xy*G_xy,y
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (x-x0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	  
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + ( 15*(x-x0)*(y-y0)*(y-y0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_yz*G_zy,y
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (z-z0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (z-z0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	  
-		      + 3*(z-z0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + ( 15*(z-z0)*(y-y0)*(y-y0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_xz*G_xy,z
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (x-x0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	  
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_yz*G_yy,z
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(y-y0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(z-z0)*(y-y0)*(y-y0) / pow(R,7) * C
+		      + 15*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) * C
 	  
-		      + (y-y0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (y-y0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	  
-		      - 1 / pow(R,3) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	  
-		      - 3*(z-z0) / pow(R,5) * C
+		      - 3*(z-z0) / cl::sycl::pow(R,5.) * C
 	  
-		      + (z-z0) / (pow(R,3)*pow(beta,2)) * B
+		      + (z-z0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 	  
 		      + 1 / R * (z-z0)*E
 		      );
@@ -4859,49 +4884,49 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_xx*G_zx,x
 		     + m0*mxx/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(z-z0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_yy*G_zy,y
 		     + m0*myy/(4*M_PI*rho)*
 		     (
-		      + 3*(y-y0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (y-y0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (y-y0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(y-y0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(y-y0)*(y-y0)*(z-z0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(y-y0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_zz**G_zz,z
 		     + m0*mzz/(4*M_PI*rho)*
 		     ( 
-		      + 3*(z-z0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - 2*(z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - 2*(z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(z-z0)*(z-z0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(z-z0)*(z-z0)*(z-z0) / pow(R,7) - 6*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) - 6*(z-z0) / cl::sycl::pow(R,5.) ) * C
 	 
-		      + (z-z0)*(z-z0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (z-z0)*(z-z0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	 
-		      - 1 / pow(R,3) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(z-z0) / pow(R,5) * C
+		      - 3*(z-z0) / cl::sycl::pow(R,5.) * C
 
-		      + (z-z0) / (pow(R,3)*pow(beta,2)) * B
+		      + (z-z0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (z-z0)*E
 		      );
@@ -4909,31 +4934,31 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_xy*G_zy,x
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (y-y0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (y-y0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	  
-		      + 3*(y-y0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_xz**G_zz,x
 		     + m0*mxz/(4*M_PI*rho)*
 		     ( 
-		      + 3*(x-x0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(z-z0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(x-x0)*(z-z0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (z-z0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (z-z0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	 
-		      - 1 / pow(R,3) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(x-x0) / pow(R,5) * C
+		      - 3*(x-x0) / cl::sycl::pow(R,5.) * C
 
-		      + (x-x0) / (pow(R,3)*pow(beta,2)) * B
+		      + (x-x0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (x-x0)*E
 		      );
@@ -4941,31 +4966,31 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_xy*G_xz,y
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_yz*G_zz,y
 		     + m0*myz/(4*M_PI*rho)*
 		     ( 
-		      + 3*(y-y0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(z-z0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(y-y0)*(z-z0)*(z-z0) / pow(R,7) * C
+		      + 15*(y-y0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (z-z0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (z-z0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	 
-		      - 1 / pow(R,3) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(y-y0) / pow(R,5) * C
+		      - 3*(y-y0) / cl::sycl::pow(R,5.) * C
 
-		      + (y-y0) / (pow(R,3)*pow(beta,2)) * B
+		      + (y-y0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (y-y0)*E
 		      );
@@ -4973,29 +4998,29 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 		     // m_xz*G_xz,z
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(x-x0)*(z-z0)*(z-z0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_yz*G_yz,z
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(z-z0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (z-z0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (z-z0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(z-z0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(z-z0)*(z-z0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  //printf("VALUE = %lf \n",up[3*ind+2]);
 	       }
@@ -5003,7 +5028,7 @@ void EW::get_exact_point_source( float_sw4* up, float_sw4 t, int g, Source& sour
 	    //ind++;
 				  });
 #ifdef CUDA_CODE
-   cudaDeviceSynchronize();
+//   cudaDeviceSynchronize();
 #endif
 }
 
@@ -5091,7 +5116,7 @@ void EW::normOfDifference( vector<Sarray> & a_Uex,  vector<Sarray> & a_U, float_
    MPI_Allreduce( &diffInfLocal, &diffInf, 1, m_mpifloat, MPI_MAX, m_cartesian_communicator );
    MPI_Allreduce( &xInfLocal,    &xInf,    1, m_mpifloat, MPI_MAX, m_cartesian_communicator );
    MPI_Allreduce( &diffL2Local,  &diffL2,  1, m_mpifloat, MPI_SUM, m_cartesian_communicator );
-   diffL2 = sqrt(diffL2);
+   diffL2 = cl::sycl::sqrt(diffL2);
 }
 
 
@@ -5538,10 +5563,10 @@ void EW::computeDT()
 	    {
 	       float_sw4 loceig = (4*mMu[g](i,j,k) + mLambda[g](i,j,k) )/mRho[g](i,j,k);
 	       eigmax = loceig > eigmax ? loceig:eigmax;
-		  //	       dtGP = mCFL*mGridSize[g]/sqrt( loceig );
+		  //	       dtGP = mCFL*mGridSize[g]/cl::sycl::sqrt( loceig );
 		  //	       dtloc = dtloc < dtGP ? dtloc : dtGP;
 	    }
-      float_sw4 ieigmax = 1/sqrt(eigmax);
+      float_sw4 ieigmax = 1/cl::sycl::sqrt(eigmax);
       dtloc = dtloc < mCFL*mGridSize[g]*ieigmax ? dtloc : mCFL*mGridSize[g]*ieigmax;
    }
    if( m_topography_exists )
@@ -5610,7 +5635,7 @@ void EW::computeDT()
 	       float_sw4 loceig = (-W[0])/(4.*mRho[g](i,j,k));
 	       eigmax = loceig > eigmax ? loceig:eigmax;
 	    }
-      float_sw4 ieigmax = 1/sqrt(eigmax);
+      float_sw4 ieigmax = 1/cl::sycl::sqrt(eigmax);
       dtCurv = mCFL*ieigmax;
       dtloc = dtloc<dtCurv ? dtloc: dtCurv;
 #undef SQR
@@ -5641,7 +5666,6 @@ void EW::computeNearestGridPoint(int & a_i,
                                    float_sw4 a_z)
 {
   bool breakLoop = false;
-  
   for (int g = 0; g < mNumberOfGrids; g++)
     {
       if (a_z > m_zmin[g] || g == mNumberOfGrids-1) // We can not trust zmin for the curvilinear grid, since it doesn't mean anything
@@ -6083,7 +6107,6 @@ bool EW::interpolate_topography( float_sw4 q, float_sw4 r, float_sw4 & Z0, bool 
 // NOTE:
 // The parameters are normalized such that 1 <= q <= Nx is the full domain (without ghost points),
 //  1 <= r <= Ny.
-
 // 0. No topography, easy case:
    if( !topographyExists() )
    {
@@ -6110,7 +6133,7 @@ bool EW::interpolate_topography( float_sw4 q, float_sw4 r, float_sw4 & Z0, bool 
       float_sw4 Y0   = (r-1.0)*h;
       float_sw4 igx2 = 1.0/(m_GaussianLx*m_GaussianLx);
       float_sw4 igy2 = 1.0/(m_GaussianLy*m_GaussianLy);
-      tau = m_GaussianAmp*exp(-(X0-m_GaussianXc)*(X0-m_GaussianXc)*igx2
+      tau = m_GaussianAmp*cl::sycl::exp(-(X0-m_GaussianXc)*(X0-m_GaussianXc)*igx2
 			      -(Y0-m_GaussianYc)*(Y0-m_GaussianYc)*igy2 );
    }
    else
@@ -6368,7 +6391,7 @@ void EW::extractRecordData(TimeSeries::receiverMode mode, int i0, int j0, int k0
     else // must be curvilinear
     {
 //      int i=m_i0, j=m_j0, k=m_k0, g=m_grid0;
-       float_sw4 factor = 0.5/sqrt(mJ(i0,j0,k0));
+       float_sw4 factor = 0.5/cl::sycl::sqrt(mJ(i0,j0,k0));
        uRec[0] = ( ( mMetric(1,i0,j0,k0)*(U[g0](1,i0+1,j0,k0) - U[g0](1,i0-1,j0,k0))+
 		     mMetric(1,i0,j0,k0)*(U[g0](2,i0,j0+1,k0) - U[g0](2,i0,j0-1,k0))+
 		     mMetric(2,i0,j0,k0)*(U[g0](1,i0,j0,k0+1) - U[g0](1,i0,j0,k0-1))+
@@ -6407,7 +6430,7 @@ void EW::extractRecordData(TimeSeries::receiverMode mode, int i0, int j0, int k0
     else // must be curvilinear
     {
 //       int i=m_i0, j=m_j0, k=m_k0, g=m_grid0;
-      float_sw4 factor = 0.5/sqrt(mJ(i0,j0,k0));
+      float_sw4 factor = 0.5/cl::sycl::sqrt(mJ(i0,j0,k0));
       float_sw4 duxdq = (U[g0](1,i0+1,j0,k0) - U[g0](1,i0-1,j0,k0));
       float_sw4 duydq = (U[g0](2,i0+1,j0,k0) - U[g0](2,i0-1,j0,k0));
       float_sw4 duzdq = (U[g0](3,i0+1,j0,k0) - U[g0](3,i0-1,j0,k0));
@@ -6465,7 +6488,7 @@ void EW::extractRecordData(TimeSeries::receiverMode mode, int i0, int j0, int k0
     else // must be curvilinear
    {
 //       int i=m_i0, j=m_j0, k0=m_k00, g0=m_grid0;
-      float_sw4 factor = 0.5/sqrt(mJ(i0,j0,k0));
+      float_sw4 factor = 0.5/cl::sycl::sqrt(mJ(i0,j0,k0));
       float_sw4 duxdq = (U[g0](1,i0+1,j0,k0) - U[g0](1,i0-1,j0,k0));
       float_sw4 duydq = (U[g0](2,i0+1,j0,k0) - U[g0](2,i0-1,j0,k0));
       float_sw4 duzdq = (U[g0](3,i0+1,j0,k0) - U[g0](3,i0-1,j0,k0));
@@ -6523,7 +6546,7 @@ void EW::extractRecordData(TimeSeries::receiverMode mode, int i0, int j0, int k0
      else // must be curvilinear
      {
 //       int i=m_i0, j=m_j0, k0=m_k00, g0=m_grid0;
-	float_sw4 factor = 0.5/sqrt(mJ(i0,j0,k0));
+	float_sw4 factor = 0.5/cl::sycl::sqrt(mJ(i0,j0,k0));
 	float_sw4 duxdq = (U[g0](1,i0+1,j0,k0) - U[g0](1,i0-1,j0,k0));
 	float_sw4 duydq = (U[g0](2,i0+1,j0,k0) - U[g0](2,i0-1,j0,k0));
 	float_sw4 duzdq = (U[g0](3,i0+1,j0,k0) - U[g0](3,i0-1,j0,k0));
@@ -6593,7 +6616,7 @@ void EW::buildGaussianHillTopography(float_sw4 amp, float_sw4 Lx, float_sw4 Ly, 
       x = (i-1)*mGridSize[topLevel];
       y = (j-1)*mGridSize[topLevel];
 // positive topography  is up (negative z)
-      mTopo(i,j,1) = m_GaussianAmp*exp(-SQR((x-m_GaussianXc)/m_GaussianLx) 
+      mTopo(i,j,1) = m_GaussianAmp*cl::sycl::exp(-SQR((x-m_GaussianXc)/m_GaussianLx) 
 			               -SQR((y-m_GaussianYc)/m_GaussianLy));
     }
 
@@ -6603,7 +6626,7 @@ void EW::buildGaussianHillTopography(float_sw4 amp, float_sw4 Lx, float_sw4 Ly, 
 	x = (i-1)*mGridSize[topLevel];
 	y = (j-1)*mGridSize[topLevel];
 // positive topography  is up (negative z)
-	mTopoGridExt(i,j,1) = m_GaussianAmp*exp(-SQR((x-m_GaussianXc)/m_GaussianLx) 
+	mTopoGridExt(i,j,1) = m_GaussianAmp*cl::sycl::exp(-SQR((x-m_GaussianXc)/m_GaussianLx) 
 						-SQR((y-m_GaussianYc)/m_GaussianLy)); 
      }
 #undef SQR
@@ -6912,11 +6935,12 @@ void EW::sort_grid_point_sources()
    if(nrunique > 0 ) 
    {
    ForceVector = newmanaged(nrunique*3);
-   cudaError_t retcode = cudaMallocManaged((void**)&ForceAddress, 3*nrunique*sizeof(float_sw4*));
-   if( retcode != cudaSuccess )
-      cout << "Error creating Managed ForceAddress array on device. retval = " << cudaGetErrorString(retcode) << endl;
+   ForceAddress = (float_sw4**) cl::sycl::malloc_shared(3*nrunique*sizeof(float_sw4*), *QU::qu);
+//   cudaError_t retcode = cudaMallocManaged((void**)&ForceAddress, 3*nrunique*sizeof(float_sw4*));
+//   if( retcode != cudaSuccess )
+//      cout << "Error creating Managed ForceAddress array on device. retval = " << cudaGetErrorString(retcode) << endl;
    map[ForceAddress]= 3*nrunique*sizeof(float_sw4*);
-   cudaDeviceSynchronize();
+//   cudaDeviceSynchronize();
    }
 #else
    ForceVector = new double[nrunique*3];
@@ -6979,12 +7003,13 @@ float_sw4* EW::newmanaged(size_t len){
    //std::cout<<"******Using overloaded new**********\n";
    //cudaMallocManaged(&ptr, len*sizeof(float_sw4),cudaMemAttachHost);
 #ifdef CUDA_CODE
-   cudaError_t retcode = cudaMallocManaged(&ptr, len*sizeof(float_sw4),cudaMemAttachGlobal);
-   if( retcode != cudaSuccess )
-      cout << "Error creating Managed array newmanaged on device. retval = " << cudaGetErrorString(retcode) << endl;
+//   cudaError_t retcode = cudaMallocManaged(&ptr, len*sizeof(float_sw4),cudaMemAttachGlobal);
+   ptr = (float_sw4*) cl::sycl::malloc_shared(len*sizeof(float_sw4), *QU::qu);
+//   if( retcode != cudaSuccess )
+  //    cout << "Error creating Managed array newmanaged on device. retval = " << cudaGetErrorString(retcode) << endl;
    map[ptr]=len*sizeof(float_sw4);
    prefetched[ptr]=false;
-   cudaDeviceSynchronize();
+//   cudaDeviceSynchronize();
 #else
    //ptr=malloc(len*sizeof(float_sw4));
 #ifdef ASSUME_ALIGNED
@@ -7001,11 +7026,12 @@ float_sw4* EW::newmanagedh(size_t len){
    //cudaMallocManaged(&ptr, len*sizeof(float_sw4),cudaMemAttachHost);
 #ifdef CUDA_CODE
    //cudaMalloc(&ptr, len*sizeof(float_sw4));
-   cudaHostAlloc(&ptr,len*sizeof(float_sw4),cudaHostAllocMapped);
+//   cudaHostAlloc(&ptr,len*sizeof(float_sw4),cudaHostAllocMapped);
+   ptr = (float_sw4*) cl::sycl::malloc_shared(len * sizeof(float_sw4), *QU::qu);
    //cudaMallocManaged(&ptr, len*sizeof(float_sw4),cudaMemAttachGlobal);
    map[ptr]=len*sizeof(float_sw4);
    //prefetched[ptr]=false;
-   cudaDeviceSynchronize();
+//   cudaDeviceSynchronize();
 #else
    ptr=malloc(len*sizeof(float_sw4));
 #endif
@@ -7019,8 +7045,9 @@ void EW::delmanaged(float_sw4* &dptr){
     std::cerr<<"ERROR EW::delamanged trying to delete non-managed pointer\n";
     abort();
   }
-  cudaDeviceSynchronize();
-  cudaFree((void*)dptr);
+//  cudaDeviceSynchronize();
+//  cudaFree((void*)dptr);
+  cl::sycl::free(dptr, *QU::qu);
 #else
   free((void*)dptr);
 #endif
@@ -7031,16 +7058,17 @@ int EW::prefetch(void *ptr,int device){
   if (ptr==NULL) return 0;
   if (prefetched[ptr]) return 0;
   prefetched[ptr]=true;
-  PUSH_RANGE("EW::PREFETCH",2);
+  //PUSH_RANGE("EW::PREFETCH",2);
 
   if (map.find(ptr)!=map.end()){
-    cudaMemPrefetchAsync(ptr, 
-			 map[ptr],
-			 device,
-			 0);
+//    cudaMemPrefetchAsync(ptr, 
+//			 map[ptr],
+//			 device,
+//			 0);
 
+    QU::qu->prefetch(ptr, map[ptr]);
     SYNC_DEVICE
-      POP_RANGE;
+      //POP_RANGE;
       return 0;
   }
   else{
@@ -7055,16 +7083,16 @@ int EW::prefetchforced(void *ptr,int device){
 #ifdef CUDA_CODE
   if (ptr==NULL) return 0;
   prefetched[ptr]=true;
-  PUSH_RANGE("EW::PREFETCHFORCED",2);
+  //PUSH_RANGE("EW::PREFETCHFORCED",2);
 
   if (map.find(ptr)!=map.end()){
-    cudaMemPrefetchAsync(ptr, 
-			 map[ptr],
-			 device,
-			 0);
-
+//    cudaMemPrefetchAsync(ptr, 
+//			 map[ptr],
+//			 device,
+//			 0);
+    QU::qu->prefetch(ptr, map[ptr]);
     SYNC_DEVICE
-      POP_RANGE;
+      //POP_RANGE;
       return 0;
   }
   else{
@@ -7080,7 +7108,7 @@ void EW::AMPI_Sendrecv(float_sw4* a, int scount, std::tuple<int,int,int> &sendt,
 		       float_sw4* b, int rcount, std::tuple<int,int,int> &recvt, int recvfrom, int rtag,
 		       std::tuple<float_sw4*,float_sw4*> &buf,
 		       MPI_Comm comm, MPI_Status *status){
-  PUSH_RANGE_PAYLOAD("AMPI_SENDRECV",stag%6,stag);
+  //PUSH_RANGE_PAYLOAD("AMPI_SENDRECV",stag%6,stag);
   MPI_Request send_req,recv_req;
   
   int recv_count=std::get<0>(recvt)*std::get<1>(recvt);
@@ -7110,7 +7138,7 @@ void EW::AMPI_Sendrecv(float_sw4* a, int scount, std::tuple<int,int,int> &sendt,
   if (sendto!=MPI_PROC_NULL)
     if (MPI_Wait(&send_req,&send_status)!=MPI_SUCCESS) std::cerr<<"MPI_WAIT SEND FAILED IN AMPI_SENDrecv\n";
 
-  POP_RANGE;
+  //POP_RANGE;
 }
 
 
@@ -7119,7 +7147,7 @@ EW::AMPI_SendrecvSplit(float_sw4* a, int scount, std::tuple<int,int,int> &sendt,
 		       float_sw4* b, int rcount, std::tuple<int,int,int> &recvt, int recvfrom, int rtag,
 		       std::tuple<float_sw4*,float_sw4*> &buf,
 		       MPI_Comm comm, MPI_Status *status){
-  PUSH_RANGE_PAYLOAD("AMPI_SR_SPLIT",stag%6,stag);
+  //PUSH_RANGE_PAYLOAD("AMPI_SR_SPLIT",stag%6,stag);
   MPI_Request *send_req,*recv_req;
   send_req = new MPI_Request;
   recv_req = new MPI_Request;
@@ -7150,13 +7178,13 @@ EW::AMPI_SendrecvSplit(float_sw4* a, int scount, std::tuple<int,int,int> &sendt,
   
   //std::tuple<MPI_Status,double *, double *, std::tuple<int,int,int> &,MPI_Status> retval;
   auto retval = std::make_tuple(recv_req,b,std::get<1>(buf),recvt,send_req);
-  POP_RANGE;
+  //POP_RANGE;
   return retval;
 }
 
 void EW::AMPI_SendrecvSync(std::vector<AMPI_Ret_type> &list){
   //std::cout<<"AMPI_SYNC.."<<MPI_REQUEST_NULL;
-  PUSH_RANGE("AMPI_SYNC",4);
+  //PUSH_RANGE("AMPI_SYNC",4);
   MPI_Request *waitlist;
   int indx;
   waitlist = new MPI_Request[list.size()];
@@ -7194,7 +7222,7 @@ void EW::AMPI_SendrecvSync(std::vector<AMPI_Ret_type> &list){
     delete std::get<4>(list[i]);
   }
   //std::cout<<"Done \n";
-  POP_RANGE;
+  //POP_RANGE;
 }
 void EW::getbuffer(float_sw4 *data, float_sw4* buf, std::tuple<int,int,int> &mtype ){
 
@@ -7211,14 +7239,14 @@ void EW::getbuffer_device(float_sw4 *data, float_sw4* buf, std::tuple<int,int,in
   int bl = std::get<1>(mtype);
   int stride = std::get<2>(mtype);
   //std::cout<<"getbuffer_device...";
-  PUSH_RANGE_PAYLOAD("GET_BUFFER",1,count*bl);
+  //PUSH_RANGE_PAYLOAD("GET_BUFFER",1,count*bl);
   //PREFETCHFORCED(buf);
   forall<EXEC > (RAJA::RangeSegment(0,count),[=] RAJA_DEVICE(int i){
     for (int k=0;k<bl;k++) buf[k+i*bl]=data[i*stride+k];
   });
 
   SYNC_DEVICE;
-  POP_RANGE;
+  //POP_RANGE;
   //std::cout<<"Done\n";
 }
 
@@ -7247,7 +7275,7 @@ void EW::putbuffer_device(float_sw4 *data, float_sw4* buf, std::tuple<int,int,in
   int bl = std::get<1>(mtype);
   int stride = std::get<2>(mtype);
   //std::cout<<"putbuffer_device...";
-  PUSH_RANGE_PAYLOAD("PUT_BUFFER",2,count*bl);
+  //PUSH_RANGE_PAYLOAD("PUT_BUFFER",2,count*bl);
   //PREFETCHFORCED(buf);
   RAJA::forall<EXEC > (RAJA::RangeSegment(0,count),[=] RAJA_DEVICE(int i){
       for (int k=0;k<bl;k++) data[i*stride+k]=buf[k+i*bl];
@@ -7255,7 +7283,7 @@ void EW::putbuffer_device(float_sw4 *data, float_sw4* buf, std::tuple<int,int,in
 
   SYNC_DEVICE;
   //std::cout<<"Done\n";
-  POP_RANGE;
+  //POP_RANGE;
 }
 //-----------------------------------------------------------------------
 void EW::get_exact_point_source2( float_sw4* up, float_sw4 t, int g, Source& source,
@@ -7284,8 +7312,8 @@ void EW::get_exact_point_source2( float_sw4* up, float_sw4 t, int g, Source& sou
    int jmid = (m_jStart[g]+m_jEnd[g])/2;
    int kmid = (m_kStart[g]+m_kEnd[g])/2;
    float_sw4 rho   = mRho[g](imid,jmid,kmid);
-   float_sw4 beta  =  sqrt( mMu[g](imid,jmid,kmid)/rho);
-   float_sw4 alpha =  sqrt( (2*mMu[g](imid,jmid,kmid)+mLambda[g](imid,jmid,kmid))/rho);
+   float_sw4 beta  =  cl::sycl::sqrt( mMu[g](imid,jmid,kmid)/rho);
+   float_sw4 alpha =  cl::sycl::sqrt( (2*mMu[g](imid,jmid,kmid)+mLambda[g](imid,jmid,kmid))/rho);
 
       //   double alpha = m_point_source_test->m_cp;
       //   double beta  = m_point_source_test->m_cs;
@@ -7364,7 +7392,11 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
    // 				  RangeSegment(jmin,jmax+1),
    // 				  RangeSegment(imin,imax+1),
    // 				  [=] RAJA_DEVICE(int k, int j, int i) {
-	 
+	   using cl::sycl::pow;
+  using cl::sycl::erf;
+  using cl::sycl::sqrt;
+  using cl::sycl::exp;
+
             float_sw4 x,y,z;
 	    size_t ind = (i-imin)+(j-jmin)*(imax-imin+1)+(k-kmin)*(jmax-jmin+1)*(imax-imin+1);
 	    //	    if( curvilinear )
@@ -7380,7 +7412,7 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 	       z = (k-1)*h + m_zmin_local;
 	    }
 
-	       float_sw4 R = sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
+	       float_sw4 R = cl::sycl::sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
 	       if( R < eps )
 		  up[3*ind] = up[3*ind+1] = up[3*ind+2] = 0;
 	       else
@@ -7388,35 +7420,35 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		  float_sw4 A, B;
 		  if (tD == iSmoothWave)
 		  {
-		     A = ( 1/pow(alpha,2) * SmoothWave(time, fr*R, alpha) - 1/pow(beta,2) * SmoothWave(time, fr*R, beta) +
-			   3/pow(fr*R,2) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * SmoothWave(time, fr*R, alpha) - 1/cl::sycl::pow(beta,2.) * SmoothWave(time, fr*R, beta) +
+			   3/cl::sycl::pow(fr*R,2.) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 	  
-		     B = ( 1/pow(beta,2) * SmoothWave(time, fr*R, beta) -
-			   1/pow(fr*R,2) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * SmoothWave(time, fr*R, beta) -
+			   1/cl::sycl::pow(fr*R,2.) * SmoothWave_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
 		  else if (tD == iVerySmoothBump)
 		  {
-		     A = ( 1/pow(alpha,2) * VerySmoothBump(time, fr*R, alpha) - 1/pow(beta,2) * VerySmoothBump(time, fr*R, beta) +
-			   3/pow(fr*R,2) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * VerySmoothBump(time, fr*R, alpha) - 1/cl::sycl::pow(beta,2.) * VerySmoothBump(time, fr*R, beta) +
+			   3/cl::sycl::pow(fr*R,2.) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 		     
-		     B = ( 1/pow(beta,2) * VerySmoothBump(time, fr*R, beta) -
-			   1/pow(fr*R,2) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * VerySmoothBump(time, fr*R, beta) -
+			   1/cl::sycl::pow(fr*R,2.) * VerySmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
 		  else if (tD == iC6SmoothBump)
 		  {
-		     A = ( 1/pow(alpha,2) * C6SmoothBump(time, fr*R, alpha) - 1/pow(beta,2) * C6SmoothBump(time, fr*R, beta) +
-			   3/pow(fr*R,2) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * C6SmoothBump(time, fr*R, alpha) - 1/cl::sycl::pow(beta,2.) * C6SmoothBump(time, fr*R, beta) +
+			   3/cl::sycl::pow(fr*R,2.) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 		     
-		     B = ( 1/pow(beta,2) * C6SmoothBump(time, fr*R, beta) -
-			   1/pow(fr*R,2) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * C6SmoothBump(time, fr*R, beta) -
+			   1/cl::sycl::pow(fr*R,2.) * C6SmoothBump_x_T_Integral(time, fr*R, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
                   else if( tD == iGaussian )
 		  {
-		     A = ( 1/pow(alpha,2) * Gaussian(time, R, alpha,fr) - 1/pow(beta,2) * Gaussian(time, R, beta,fr) +
-			   3/pow(R,2) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
+		     A = ( 1/cl::sycl::pow(alpha,2.) * Gaussian(time, R, alpha,fr) - 1/cl::sycl::pow(beta,2.) * Gaussian(time, R, beta,fr) +
+			   3/cl::sycl::pow(R,2.) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R*R*R)  ;
 		     
-		     B = ( 1/pow(beta,2) * Gaussian(time, R, beta,fr) -
-			   1/pow(R,2) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R) ;
+		     B = ( 1/cl::sycl::pow(beta,2.) * Gaussian(time, R, beta,fr) -
+			   1/cl::sycl::pow(R,2.) * Gaussian_x_T_Integral(time, R, fr, alpha, beta) ) / (4*M_PI*rho*R) ;
 		  }
 		  up[3*ind]   = ( (x - x0)*(x - x0)*fx + (x - x0)*(y - y0)*fy + (x - x0)*(z - z0)*fz )*A + fx*B;
 		  up[3*ind+1] = ( (y - y0)*(x - x0)*fx + (y - y0)*(y - y0)*fy + (y - y0)*(z - z0)*fz )*A + fy*B;
@@ -7433,7 +7465,10 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
    RAJA::kernel<EXEC_CARTBC>(
 			     RAJA::make_tuple(k_range, j_range,i_range),
 			     [=]RAJA_DEVICE (int k,int j,int i) {
-
+  using cl::sycl::pow;
+  using cl::sycl::erf;
+  using cl::sycl::sqrt;
+  using cl::sycl::exp;
 		// forallN<EXEC_CARTBC, int, int,int>(
 		// 				   RangeSegment(kmin,kmax+1),
 		// 				   RangeSegment(jmin,jmax+1),
@@ -7448,7 +7483,7 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 	       y = (j-1)*h;
 	       z = (k-1)*h + m_zmin_local;
 	    }
-	       float_sw4 R = sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
+	       float_sw4 R = cl::sycl::sqrt( (x - x0)*(x - x0) + (y - y0)*(y - y0) + (z - z0)*(z - z0) );
 	       if( R < eps )
 	       {
 	       	  up[3*ind] = up[3*ind+1] = up[3*ind+2] = 0;
@@ -7461,52 +7496,52 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     A = SmoothWave(time, R, alpha);
 		     B = SmoothWave(time, R, beta);
 		     C = SmoothWave_x_T_Integral(time, R, alpha, beta);
-		     D = d_SmoothWave_dt(time, R, alpha) / pow(alpha,3) / R;
-		     E = d_SmoothWave_dt(time, R, beta) / pow(beta,3) / R;
+		     D = d_SmoothWave_dt(time, R, alpha) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_SmoothWave_dt(time, R, beta) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  else if (tD == iVerySmoothBump)
 		  {
 		     A = VerySmoothBump(time, R, alpha);
 		     B = VerySmoothBump(time, R, beta);
 		     C = VerySmoothBump_x_T_Integral(time, R, alpha, beta);
-		     D = d_VerySmoothBump_dt(time, R, alpha) / pow(alpha,3) / R;
-		     E = d_VerySmoothBump_dt(time, R, beta) / pow(beta,3) / R;
+		     D = d_VerySmoothBump_dt(time, R, alpha) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_VerySmoothBump_dt(time, R, beta) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  else if (tD == iC6SmoothBump)
 		  {
 		     A = C6SmoothBump(time, R, alpha);
 		     B = C6SmoothBump(time, R, beta);
 		     C = C6SmoothBump_x_T_Integral(time, R, alpha, beta);
-		     D = d_C6SmoothBump_dt(time, R, alpha) / pow(alpha,3) / R;
-		     E = d_C6SmoothBump_dt(time, R, beta) / pow(beta,3) / R;
+		     D = d_C6SmoothBump_dt(time, R, alpha) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_C6SmoothBump_dt(time, R, beta) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  else if (tD == iGaussian)
 		  {
 		     A = Gaussian(time, R, alpha,fr);
 		     B = Gaussian(time, R, beta,fr);
 		     C = Gaussian_x_T_Integral(time, R, fr,alpha, beta);
-		     D = d_Gaussian_dt(time, R, alpha,fr) / pow(alpha,3) / R;
-		     E = d_Gaussian_dt(time, R, beta,fr) / pow(beta,3) / R;
+		     D = d_Gaussian_dt(time, R, alpha,fr) / cl::sycl::pow(alpha,3.) / R;
+		     E = d_Gaussian_dt(time, R, beta,fr) / cl::sycl::pow(beta,3.) / R;
 		  }
 		  up[3*ind] += 
 	// m_xx*G_xx,x
 		     + m0*mxx/(4*M_PI*rho)*
 		     ( 
-		      + 3*(x-x0)*(x-x0)*(x-x0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - 2*(x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - 2*(x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(x-x0)*(x-x0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(x-x0)*(x-x0)*(x-x0) / pow(R,7) - 6*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(x-x0) / cl::sycl::pow(R,7.) - 6*(x-x0) / cl::sycl::pow(R,5.) ) * C
 	 
-		      + (x-x0)*(x-x0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(x-x0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	 
-		      - 1 / pow(R,3) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(x-x0) / pow(R,5) * C
+		      - 3*(x-x0) / cl::sycl::pow(R,5.) * C
 
-		      + (x-x0) / (pow(R,3)*pow(beta,2)) * B
+		      + (x-x0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (x-x0)*E
 		      );
@@ -7514,61 +7549,61 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_yy*G_xy,y
 		     + m0*myy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(y-y0)*(y-y0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_zz*G_xz,z
 		     + m0*mzz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(z-z0)*(z-z0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_xy*G_xy,x
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_xy*G_xx,y
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(x-x0)*(x-x0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(x-x0)*(x-x0)*(y-y0) / pow(R,7) * C
+		      + 15*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (x-x0)*(x-x0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(x-x0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	 
-		      - 1 / pow(R,3) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(y-y0) / pow(R,5) * C
+		      - 3*(y-y0) / cl::sycl::pow(R,5.) * C
 
-		      + (y-y0) / (pow(R,3)*pow(beta,2)) * B
+		      + (y-y0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (y-y0)*E
 		      );
@@ -7576,45 +7611,45 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_xz*G_xz,x
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(z-z0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind] +=
 		     // m_yz*G_xz,y
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind] +=
 		     // m_xz*G_xx,z
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(x-x0)*(x-x0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(x-x0)*(x-x0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (x-x0)*(x-x0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(x-x0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	 
-		      - 1 / pow(R,3) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(z-z0) / pow(R,5) * C
+		      - 3*(z-z0) / cl::sycl::pow(R,5.) * C
 
-		      + (z-z0) / (pow(R,3)*pow(beta,2)) * B
+		      + (z-z0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (z-z0)*E
 		      );
@@ -7622,48 +7657,48 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_yz*G_yx,z
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  //------------------------------------------------------------
 		  up[3*ind+1] += 
 		     // m_xx*G_xy,x
 		     m0*mxx/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(y-y0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_yy**G_yy,y
 		     + m0*myy/(4*M_PI*rho)*
 		     ( 
-		      + 3*(y-y0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - 2*(y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - 2*(y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(y-y0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(y-y0)*(y-y0)*(y-y0) / pow(R,7) - 6*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(y-y0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 6*(y-y0) / cl::sycl::pow(R,5.) ) * C
 	 
-		      + (y-y0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (y-y0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	 
-		      - 1 / pow(R,3) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(y-y0) / pow(R,5) * C
+		      - 3*(y-y0) / cl::sycl::pow(R,5.) * C
 
-		      + (y-y0) / (pow(R,3)*pow(beta,2)) * B
+		      + (y-y0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (y-y0)*E
 		      );
@@ -7671,33 +7706,33 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_zz*G_zy,z
 		     + m0*mzz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(z-z0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (z-z0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (z-z0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(z-z0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(z-z0)*(z-z0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_xy*G_yy,x
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(y-y0)*(y-y0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(y-y0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) * C
 	  
-		      + (y-y0)*(y-y0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (y-y0)*(y-y0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	  
-		      - 1 / pow(R,3) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      - 3*(x-x0) / pow(R,5) * C
+		      - 3*(x-x0) / cl::sycl::pow(R,5.) * C
 	  
-		      + (x-x0) / (pow(R,3)*pow(beta,2)) * B
+		      + (x-x0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 	  
 		      + 1 / R * (x-x0)*E
 		      );
@@ -7705,71 +7740,71 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_xz*G_zy,x
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (y-y0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (y-y0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	  
-		      + 3*(y-y0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_xy*G_xy,y
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (x-x0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	  
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + ( 15*(x-x0)*(y-y0)*(y-y0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_yz*G_zy,y
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (z-z0)*(y-y0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (z-z0)*(y-y0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	  
-		      + 3*(z-z0)*(y-y0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + ( 15*(z-z0)*(y-y0)*(y-y0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_xz*G_xy,z
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (x-x0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	  
-		      + 3*(x-x0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+1] += 
 		     // m_yz*G_yy,z
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(y-y0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(y-y0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(z-z0)*(y-y0)*(y-y0) / pow(R,7) * C
+		      + 15*(z-z0)*(y-y0)*(y-y0) / cl::sycl::pow(R,7.) * C
 	  
-		      + (y-y0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (y-y0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	  
-		      - 1 / pow(R,3) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	  
-		      - 3*(z-z0) / pow(R,5) * C
+		      - 3*(z-z0) / cl::sycl::pow(R,5.) * C
 	  
-		      + (z-z0) / (pow(R,3)*pow(beta,2)) * B
+		      + (z-z0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 	  
 		      + 1 / R * (z-z0)*E
 		      );
@@ -7778,49 +7813,49 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_xx*G_zx,x
 		     + m0*mxx/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(x-x0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(x-x0)*(x-x0)*(z-z0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(x-x0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_yy*G_zy,y
 		     + m0*myy/(4*M_PI*rho)*
 		     (
-		      + 3*(y-y0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(y-y0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (y-y0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (y-y0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(y-y0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(y-y0)*(y-y0)*(z-z0) / pow(R,7) - 3*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(y-y0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(z-z0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_zz**G_zz,z
 		     + m0*mzz/(4*M_PI*rho)*
 		     ( 
-		      + 3*(z-z0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - 2*(z-z0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - 2*(z-z0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(z-z0)*(z-z0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(z-z0)*(z-z0)*(z-z0) / pow(R,7) - 6*(z-z0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) - 6*(z-z0) / cl::sycl::pow(R,5.) ) * C
 	 
-		      + (z-z0)*(z-z0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (z-z0)*(z-z0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	 
-		      - 1 / pow(R,3) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(z-z0) / pow(R,5) * C
+		      - 3*(z-z0) / cl::sycl::pow(R,5.) * C
 
-		      + (z-z0) / (pow(R,3)*pow(beta,2)) * B
+		      + (z-z0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (z-z0)*E
 		      );
@@ -7828,31 +7863,31 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_xy*G_zy,x
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	  
-		      + (y-y0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (y-y0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	  
-		      + 3*(y-y0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	  
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_xz**G_zz,x
 		     + m0*mxz/(4*M_PI*rho)*
 		     ( 
-		      + 3*(x-x0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(z-z0)*(z-z0) / pow(R,5) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(x-x0)*(z-z0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (z-z0)*(z-z0) / pow(R,3)* ((x-x0)*D - (x-x0)*E)
+		      + (z-z0)*(z-z0) / cl::sycl::pow(R,3.)* ((x-x0)*D - (x-x0)*E)
 	 
-		      - 1 / pow(R,3) * ((x-x0)*A/pow(alpha,2) - (x-x0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((x-x0)*A/cl::sycl::pow(alpha,2.) - (x-x0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(x-x0) / pow(R,5) * C
+		      - 3*(x-x0) / cl::sycl::pow(R,5.) * C
 
-		      + (x-x0) / (pow(R,3)*pow(beta,2)) * B
+		      + (x-x0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (x-x0)*E
 		      );
@@ -7860,31 +7895,31 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_xy*G_xz,y
 		     + m0*mxy/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(y-y0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      + 15*(x-x0)*(y-y0)*(z-z0) / pow(R,7) * C
+		      + 15*(x-x0)*(y-y0)*(z-z0) / cl::sycl::pow(R,7.) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_yz*G_zz,y
 		     + m0*myz/(4*M_PI*rho)*
 		     ( 
-		      + 3*(y-y0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(y-y0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + 3*(z-z0)*(z-z0) / pow(R,5) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + 15*(y-y0)*(z-z0)*(z-z0) / pow(R,7) * C
+		      + 15*(y-y0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) * C
 	 
-		      + (z-z0)*(z-z0) / pow(R,3)* ((y-y0)*D - (y-y0)*E)
+		      + (z-z0)*(z-z0) / cl::sycl::pow(R,3.)* ((y-y0)*D - (y-y0)*E)
 	 
-		      - 1 / pow(R,3) * ((y-y0)*A/pow(alpha,2) - (y-y0)*B/pow(beta,2))
+		      - 1 / cl::sycl::pow(R,3.) * ((y-y0)*A/cl::sycl::pow(alpha,2.) - (y-y0)*B/cl::sycl::pow(beta,2.))
 
-		      - 3*(y-y0) / pow(R,5) * C
+		      - 3*(y-y0) / cl::sycl::pow(R,5.) * C
 
-		      + (y-y0) / (pow(R,3)*pow(beta,2)) * B
+		      + (y-y0) / (cl::sycl::pow(R,3.)*cl::sycl::pow(beta,2.)) * B
 
 		      + 1 / R * (y-y0)*E
 		      );
@@ -7892,29 +7927,29 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 		     // m_xz*G_xz,z
 		     + m0*mxz/(4*M_PI*rho)*
 		     (
-		      + 3*(x-x0)*(z-z0)*(z-z0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      - (x-x0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (x-x0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 	 
-		      + (x-x0)*(z-z0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (x-x0)*(z-z0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 	 
-		      + 3*(x-x0)*(z-z0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(x-x0)*(z-z0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 	 
-		      + ( 15*(x-x0)*(z-z0)*(z-z0) / pow(R,7) - 3*(x-x0) / pow(R,5) ) * C
+		      + ( 15*(x-x0)*(z-z0)*(z-z0) / cl::sycl::pow(R,7.) - 3*(x-x0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  up[3*ind+2] += 
 		     // m_yz*G_yz,z
 		     + m0*myz/(4*M_PI*rho)*
 		     (
-		      + 3*(z-z0)*(z-z0)*(y-y0) / pow(R,5) * (A/pow(alpha,2) - B/pow(beta,2))
+		      + 3*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      - (y-y0) / pow(R,3) * (A/pow(alpha,2) - B/pow(beta,2))
+		      - (y-y0) / cl::sycl::pow(R,3.) * (A/cl::sycl::pow(alpha,2.) - B/cl::sycl::pow(beta,2.))
 
-		      + (z-z0)*(y-y0) / pow(R,3)* ((z-z0)*D - (z-z0)*E)
+		      + (z-z0)*(y-y0) / cl::sycl::pow(R,3.)* ((z-z0)*D - (z-z0)*E)
 
-		      + 3*(z-z0)*(y-y0) / pow(R,5) * ((z-z0)*A/pow(alpha,2) - (z-z0)*B/pow(beta,2))
+		      + 3*(z-z0)*(y-y0) / cl::sycl::pow(R,5.) * ((z-z0)*A/cl::sycl::pow(alpha,2.) - (z-z0)*B/cl::sycl::pow(beta,2.))
 
-		      + ( 15*(z-z0)*(z-z0)*(y-y0) / pow(R,7) - 3*(y-y0) / pow(R,5) ) * C
+		      + ( 15*(z-z0)*(z-z0)*(y-y0) / cl::sycl::pow(R,7.) - 3*(y-y0) / cl::sycl::pow(R,5.) ) * C
 		      );
 		  //printf("VALUE = %lf \n",up[3*ind+2]);
 	       }
@@ -7922,7 +7957,7 @@ RAJA::RangeSegment k_range(kmin,kmax+1);
 	    //ind++;
 				  
 #ifdef CUDA_CODE
-   cudaDeviceSynchronize();
+//   cudaDeviceSynchronize();
 #endif
 }
 #ifdef SW4_CUDA

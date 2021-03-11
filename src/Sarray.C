@@ -446,7 +446,7 @@ void Sarray::set_to_zero()
       m_data_local[i]=0.0;
     });
 #ifdef CUDA_CODE
-  SW4_CheckDeviceError(cudaStreamSynchronize(0));
+//  SW4_CheckDeviceError(cudaStreamSynchronize(0));
 #endif
   return;
 #pragma omp parallel for
@@ -471,7 +471,7 @@ double *m_data_local=m_data;
       m_data_local[i]=scalar;
     });
 #ifdef CUDA_CODE
-  cudaDeviceSynchronize();
+//  cudaDeviceSynchronize();
 #endif
 }
 
@@ -592,7 +592,7 @@ size_t Sarray::count_nans()
        if(::isnan(m_data_copy[ind]) ) rretval+=1;
      });
 #ifdef CUDA_CODE
-   cudaDeviceSynchronize();
+//   cudaDeviceSynchronize();
 #endif
    return rretval.get();
 #pragma omp parallel for reduction(+:retval)
@@ -1144,11 +1144,12 @@ double *Sarray::newmanaged(size_t len){
    //std::cout<<"******Using overloaded new**********\n";
    //cudaMallocManaged(&ptr, len*sizeof(double),cudaMemAttachHost);
 #ifdef CUDA_CODE
-   cudaError_t retcode = cudaMallocManaged(&ptr, len*sizeof(double),cudaMemAttachGlobal);
-   if( retcode != cudaSuccess )
-      cout << "Error creating Managed Sarray on device. retval = " << cudaGetErrorString(retcode) << endl;
+//   cudaError_t retcode = cudaMallocManaged(&ptr, len*sizeof(double),cudaMemAttachGlobal);
+   ptr = (double*) cl::sycl::malloc_shared(len*sizeof(double), *QU::qu);
+//   if( retcode != cudaSuccess )
+//      cout << "Error creating Managed Sarray on device. retval = " << cudaGetErrorString(retcode) << endl;
    map[ptr]=len*sizeof(double);
-   cudaDeviceSynchronize();
+//   cudaDeviceSynchronize();
    managed=true;
 #else
    //ptr=malloc(len*sizeof(double));
@@ -1163,8 +1164,9 @@ double *Sarray::newmanaged(size_t len){
 void Sarray::delmanaged(double* &dptr){
 #ifdef CUDA_CODE
   if (managed){
-    cudaDeviceSynchronize();
-    cudaFree((void*)dptr);
+//    cudaDeviceSynchronize();
+//    cudaFree((void*)dptr);
+    cl::sycl::free(dptr, *QU::qu);
     dptr=NULL;
   } else
     delete [] dptr;
@@ -1181,7 +1183,7 @@ char *Sarray::status(){
 RAJA_DEVICE bool myisnan(const double in) {
   return ::isnan(in);
 }
-#ifdef CUDA_CODE
+#ifdef CUDA_CODE_BRIAN
 void PrintPointerAttributes(void *ptr){
   struct cudaPointerAttributes ptr_att;
   if (cudaPointerGetAttributes(&ptr_att,ptr)!=cudaSuccess){
@@ -1213,11 +1215,13 @@ bool IsManaged(void *ptr){
 void Sarray::prefetch(int device){
 #ifdef CUDA_CODE
   if (managed){
-    cudaMemPrefetchAsync(m_data, 
-			 m_nc*m_ni*m_nj*m_nk*sizeof(double),
-			 device,
-			 0);
-    if (device==cudaCpuDeviceId) SYNC_DEVICE;
+//    cudaMemPrefetchAsync(m_data, 
+//			 m_nc*m_ni*m_nj*m_nk*sizeof(double),
+//			 device,
+//			 0);
+//    if (device==cudaCpuDeviceId) SYNC_DEVICE;
+    QU::qu->prefetch(m_data, m_nc*m_ni*m_nj*m_nk*sizeof(double));
+
   }
 #endif
 }

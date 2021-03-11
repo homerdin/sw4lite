@@ -119,7 +119,7 @@ public:
 #endif
 //      return m_data[m_nc*(i-m_ib)+m_nc*m_ni*(j-m_jb)+m_nc*m_ni*m_nj*(k-m_kb)];}
       return m_data[m_base+m_offi*i+m_offj*j+m_offk*k+m_offc];}
-  inline double* offset( int c, int i, int j, int k ){ return m_data+(m_base+m_offc*c+m_offi*i+m_offj*j+m_offk*k);}
+  inline float_sw4* offset( int c, int i, int j, int k ){ return m_data+(m_base+m_offc*c+m_offi*i+m_offj*j+m_offk*k);}
    inline bool is_defined()
       {return m_data != NULL;}
    int m_ib, m_ie, m_jb, m_je, m_kb, m_ke;
@@ -179,7 +179,7 @@ private:
   inline int min(int i1,int i2){if( i1<i2 ) return i1;else return i2;}
   inline int max(int i1,int i2){if( i1>i2 ) return i1;else return i2;}
   double* newmanaged(size_t len);
-  void delmanaged(double* &dptr);
+  void delmanaged(float_sw4* &dptr);
 //   void init_mpi_datatype( CartesianProcessGrid* cartcomm );
 //    bool m_mpi_datatype_initialized;
 //    MPI_Datatype m_local_block_type;

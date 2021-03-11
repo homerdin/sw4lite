@@ -17,7 +17,7 @@ using namespace RAJA;
 // typedef NestedPolicy<ExecList<cuda_threadblock_x_exec<4>,cuda_threadblock_y_exec<4>,
 // 			      cuda_threadblock_z_exec<16>>>
 //   EXEC;
-
+/*
 using EXEC= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<256,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<16>, RAJA::cuda_block_x_loop,
@@ -27,6 +27,20 @@ using EXEC= RAJA::KernelPolicy<
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_loop,
 														RAJA::statement::For<2, RAJA::cuda_thread_z_loop,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
+*/
+    using EXEC =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<16>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<4>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+
 // typedef NestedPolicy<ExecList<cuda_threadblock_x_exec<16>,cuda_threadblock_y_exec<4>,
 // 			      cuda_threadblock_z_exec<16>>>
 //   EXEC_LARGE;
@@ -79,7 +93,7 @@ void rhs4sgcurv_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, i
 		     const float_sw4* __restrict__  a_ghcof, const float_sw4* __restrict__ a_strx,
 		     const float_sw4* __restrict__ a_stry )
 {
-  PUSH_RANGE("rhs4sgcurv_rev",3);
+  //PUSH_RANGE("rhs4sgcurv_rev",3);
 //      subroutine CURVILINEAR4SG( ifirst, ilast, jfirst, jlast, kfirst,
 //     *                         klast, u, mu, la, met, jac, lu, 
 //     *                         onesided, acof, bope, ghcof, strx, stry,
@@ -129,7 +143,7 @@ void rhs4sgcurv_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, i
    {
       kstart = 7;
       // Used 255 registers, 508 bytes cmem[0], 48 bytes cmem[2] About 2KB of spill loads and stores: 2.8 s on 4 proc case
-      PUSH_RANGE("rhs4sgcurv_rev::1",4);
+      //PUSH_RANGE("rhs4sgcurv_rev::1",4);
       RAJA::RangeSegment k_range(1,6+1);
      RAJA::RangeSegment j_range(jfirst+2,jlast-1);
      RAJA::RangeSegment i_range(ifirst+2,ilast-1);
@@ -630,10 +644,10 @@ void rhs4sgcurv_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, i
 	       lu(3,i,j,k) = a1*lu(3,i,j,k) + r3*ijac;
 	    });
 	      SYNC_DEVICE;
-	      POP_RANGE;
+	      //POP_RANGE;
    } // if onesided...
    //Uses 216 registers, 532 bytes cmem[0], 48 bytes cmem[2] 5.8 on 4 procs
-   PUSH_RANGE("rhs4sgcurv_rev::2",5);
+   //PUSH_RANGE("rhs4sgcurv_rev::2",5);
    RAJA::RangeSegment k_range(kstart,klast-1);
 	RAJA::RangeSegment j_range(jfirst+2,jlast-1);
 	RAJA::RangeSegment i_range(ifirst+2,ilast-1);
@@ -1516,7 +1530,7 @@ void rhs4sgcurv_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, i
 	    lu(3,i,j,k) = a1*lu(3,i,j,k) + r1*ijac;
 	 });
 	   SYNC_DEVICE;
-	   POP_RANGE;
+	   //POP_RANGE;
 	  
    }
 #undef mu
@@ -1531,5 +1545,5 @@ void rhs4sgcurv_rev( int ifirst, int ilast, int jfirst, int jlast, int kfirst, i
 #undef bope
 #undef ghcof
    SYNC_DEVICE;
-   POP_RANGE;
+   //POP_RANGE;
    }

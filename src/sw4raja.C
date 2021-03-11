@@ -1,6 +1,8 @@
 #include "sw4.h"
 #include "sw4raja.h"
 
+cl::sycl::queue* QU::qu;
+
 void * operator new(std::size_t size,Space loc) throw(std::bad_alloc){
 #ifdef CUDA_CODE
 if (loc==Managed){
@@ -8,7 +10,7 @@ if (loc==Managed){
     if (size==0) size=1; // new has to return an valid pointer for 0 size.
     void *ptr;
 #ifndef SW4_USE_UMPIRE
-    if (cudaMallocManaged(&ptr,size)!=cudaSuccess){
+/*    if (cudaMallocManaged(&ptr,size)!=cudaSuccess){
       std::cerr<<"Mananged memory allocation failed "<<size<<"\n";
       throw std::bad_alloc();
     } else {
@@ -17,7 +19,9 @@ if (loc==Managed){
       // global_variables.max_mem=std::max(global_variables.max_mem,global_variables.curr_mem);
       SW4_CheckDeviceError(cudaMemAdvise(ptr,size,cudaMemAdviseSetPreferredLocation,0));
       return ptr;
-    }
+    }*/
+    ptr = cl::sycl::malloc_shared(size, *QU::qu);
+    return ptr;
 #else
     umpire::ResourceManager &rma = umpire::ResourceManager::getInstance();
     auto allocator = rma.getAllocator("UM_pool");
@@ -36,14 +40,17 @@ if (loc==Managed){
   //std::cout<<"Managed allocation \n";
     if (size==0) size=1; // new has to return an valid pointer for 0 size.
     void *ptr;
-    if (cudaMalloc(&ptr,size)!=cudaSuccess){
+/*    if (cudaMalloc(&ptr,size)!=cudaSuccess){
       std::cerr<<"Device memory allocation failed "<<size<<"\n";
       throw std::bad_alloc();
-    } else return ptr;
+    } else return ptr;*/
+    ptr = cl::sycl::malloc_shared(size, *QU::qu);
+    return ptr;
  } else if (loc==Pinned){ 
   if (size==0) size=1; // new has to return an valid pointer for 0 size.
   void *ptr;
-  SW4_CheckDeviceError(cudaHostAlloc(&ptr,size,cudaHostAllocMapped));
+  ptr = cl::sycl::malloc_shared(size, *QU::qu);
+//  SW4_CheckDeviceError(cudaHostAlloc(&ptr,size,cudaHostAllocMapped));
   return ptr;
  } else if (loc==Managed_temps){
 #ifdef SW4_USE_UMPIRE
@@ -98,7 +105,7 @@ void * operator new[](std::size_t size,Space loc) throw(std::bad_alloc){
     if (size==0) size=1; // new has to return an valid pointer for 0 size.
     void *ptr;
 #ifndef SW4_USE_UMPIRE
-    if (cudaMallocManaged(&ptr,size)!=cudaSuccess){
+/*    if (cudaMallocManaged(&ptr,size)!=cudaSuccess){
       std::cerr<<"Managed memory allocation failed "<<size<<"\n";
       throw std::bad_alloc();
     } else {
@@ -107,7 +114,9 @@ void * operator new[](std::size_t size,Space loc) throw(std::bad_alloc){
       //global_variables.max_mem=std::max(global_variables.max_mem,global_variables.curr_mem);
       SW4_CheckDeviceError(cudaMemAdvise(ptr,size,cudaMemAdviseSetPreferredLocation,0));
       return ptr;
-    }
+    }*/
+    ptr = cl::sycl::malloc_shared(size, *QU::qu);
+    return ptr;
 #else
     umpire::ResourceManager &rma = umpire::ResourceManager::getInstance();
     auto allocator = rma.getAllocator("UM_pool");
@@ -125,14 +134,17 @@ void * operator new[](std::size_t size,Space loc) throw(std::bad_alloc){
     //std::cout<<"Managed allocation \n";
     if (size==0) size=1; // new has to return an valid pointer for 0 size.
     void *ptr;
-    if (cudaMalloc(&ptr,size)!=cudaSuccess){
+/*    if (cudaMalloc(&ptr,size)!=cudaSuccess){
       std::cerr<<"Device memory allocation failed "<<size<<"\n";
       throw std::bad_alloc();
-    } else return ptr;
+    } else return ptr;*/
+    ptr = cl::sycl::malloc_shared(size, *QU::qu);
+    return ptr;
   }else if (loc==Pinned){ 
     if (size==0) size=1; // new has to return an valid pointer for 0 size.
     void *ptr;
-    SW4_CheckDeviceError(cudaHostAlloc(&ptr,size,cudaHostAllocMapped));
+    ptr = cl::sycl::malloc_shared(size, *QU::qu);
+  //  SW4_CheckDeviceError(cudaHostAlloc(&ptr,size,cudaHostAllocMapped));
     return ptr;
   }  else if (loc==Managed_temps){
 #if defined(SW4_USE_UMPIRE)

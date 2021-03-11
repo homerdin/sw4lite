@@ -55,6 +55,52 @@ else ifeq ($(findstring lassen,$(HOSTNAME)),lassen)
    EXTRA_LINK_FLAGS = -O3 -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-xlf-15.1.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-xlf-15.1.5/lib -lblas -lcudart -L$(CUDA_LIBS) -lnvToolsExt /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlf90.so.1 /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlfmath.so.1
    LINKER = mpicxx
    computername := lassen
+else ifeq ($(findstring iris,$(HOSTNAME)),iris)
+   FC  = mpifort
+#   FC  = mpif90
+   CXX = mpic++
+#   CXX = mpiclang++
+   RAJA_LOCATION = /home/bhomerding/install/raja.11.29.2020
+#   RAJA_LOCATION = /home/bhomerding/install/raja.2021-01-29
+#   RAJA_LOCATION = /home/bhomerding/repo/EQSIM_work/upstream/RAJAPerf/tpl/RAJA
+   OPT = -g -O2 -std=c++11 -fvisibility-inlines-hidden  -finline-functions -finline-hint-functions -fsycl -fsycl-unnamed-lambda -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE 
+# Gnu blas/lapack libraries:
+# #   EXTRA_LINK_FLAGS = -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-gfortran-4.8.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-gfortran-4.8.5/lib -lblas -lgfortran -lcudart -L$(CUDA_LIBS) -lnvToolsExt 
+# # xlf blas/lapack libraries:
+#   EXTRA_LINK_FLAGS = -O3 -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-xlf-15.1.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-xlf-15.1.5/lib -lblas -lcudart -L$(CUDA_LIBS) -lnvToolsExt /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlf90.so.1 /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlfmath.so.1
+   EXTRA_LINK_FLAGS =  -L$(RAJA_LOCATION)/lib  -fvisibility-inlines-hidden -finline-functions -finline-hint-functions -L /soft/compilers/intel-2019/compilers_and_libraries/linux/mkl/lib/intel64 -L/soft/compilers/intel-2019/compilers_and_libraries/linux/lib/intel64 -O3 -fsycl -limf -lintlc -lsvml -lm -ldl -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lifcore -lRAJA
+   LINKER = mpic++
+   raja=yes
+   computername := iris_optimize
+ else ifeq ($(findstring yarrow,$(HOSTNAME)),yarrow)
+   FC  = mpiifort
+   CXX = mpic++
+   RAJA_LOCATION = /home/bhomerding/install/raja_dpcpp
+#   RAJA_LOCATION = /home/bhomerding/repo/EQSIM_work/upstream/RAJAPerf/tpl/RAJA
+   OPT = -g -O2 -std=c++11   -fvisibility-inlines-hidden -finline-functions -finline-hint-functions -fsycl -fsycl-unnamed-lambda -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE
+# Gnu blas/lapack libraries:
+# #   EXTRA_LINK_FLAGS = -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-gfortran-4.8.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-gfortran-4.8.5/lib -lblas -lgfortran -lcudart -L$(CUDA_LIBS) -lnvToolsExt 
+# # xlf blas/lapack libraries:
+#   EXTRA_LINK_FLAGS = -O3 -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-xlf-15.1.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-xlf-15.1.5/lib -lblas -lcudart -L$(CUDA_LIBS) -lnvToolsExt /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlf90.so.1 /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlfmath.so.1
+   EXTRA_LINK_FLAGS =  -L$(RAJA_LOCATION)/lib  -fvisibility-inlines-hidden -finline-functions -finline-hint-functions -L /soft/compilers/intel-2019/compilers_and_libraries/linux/mkl/lib/intel64 -L/soft/compilers/intel-2019/compilers_and_libraries/linux/lib/intel64 -O3 -fsycl -limf -lintlc -lsvml -lm -ldl -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lifcore -lRAJA
+   LINKER = mpic++
+   raja=yes
+#   single=yes
+   computername := yarrow
+else ifeq ($(findstring arcticus,$(HOSTNAME)),arcticus)
+   FC  = mpifort
+   CXX = mpic++
+   RAJA_LOCATION = /home/bhomerding/install/raja_ats
+#   RAJA_LOCATION = /home/bhomerding/repo/EQSIM_work/upstream/RAJAPerf/tpl/RAJA
+# Gnu blas/lapack libraries:
+   OPT = -g -O2 -std=c++11 -fvisibility-inlines-hidden  -finline-functions  -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE
+# #   EXTRA_LINK_FLAGS = -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-gfortran-4.8.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-gfortran-4.8.5/lib -lblas -lgfortran -lcudart -L$(CUDA_LIBS) -lnvToolsExt 
+# # xlf blas/lapack libraries:
+#   EXTRA_LINK_FLAGS = -O3 -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-xlf-15.1.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-xlf-15.1.5/lib -lblas -lcudart -L$(CUDA_LIBS) -lnvToolsExt /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlf90.so.1 /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlfmath.so.1
+   EXTRA_LINK_FLAGS =  -L$(RAJA_LOCATION)/lib  -fvisibility-inlines-hidden -finline-functions -finline-hint-functions -L /soft/compilers/intel-2019/compilers_and_libraries/linux/mkl/lib/intel64 -L/soft/compilers/intel-2019/compilers_and_libraries/linux/lib/intel64 -O3 -fsycl -limf -lintlc -lsvml -lm -ldl -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lifcore -lRAJA
+   LINKER = mpic++
+   raja=yes
+   computername := ats
 else ifeq ($(findstring login,$(HOSTNAME)),login)
    FC  = mpif90
    CXX = nvcc
@@ -307,8 +353,7 @@ sw4lite: $(FOBJ)
 	@echo "FC=" $(FC) " EXTRA_FORT_FLAGS=" $(EXTRA_FORT_FLAGS)
 	@echo "EXTRA_LINK_FLAGS"= $(EXTRA_LINK_FLAGS)
 	@echo "******************************************************"
-	cd $(builddir); nvcc -dlink -arch=sm_70 -o file_link.o $(OBJ) $(LINKFLAGS) -lcudadevrt -lcudart 
-	cd $(builddir); $(LINKER) $(LINKFLAGS) -o $@ file_link.o $(OBJ) $(linklibs)
+	cd $(builddir); $(LINKER) $(LINKFLAGS) -o $@  $(OBJ) $(linklibs)
 	@cat wave.txt
 	@echo "*** Build directory: " $(builddir) " ***"
 

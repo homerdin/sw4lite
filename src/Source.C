@@ -1045,7 +1045,6 @@ void Source::set_grid_point_sources4( EW *a_EW, vector<GridPointSource*>& point_
 {
    // for GPU computing copy mpar, mipar to device before creating GridPointSources.
    copy_pars_to_device();
-
 // note that this routine is called from all processors, for each input source 
 //   int i,j,k,g;
 //   a_EW->computeNearestGridPoint( i, j, k, g, mX0, mY0, mZ0 );

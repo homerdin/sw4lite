@@ -11,7 +11,7 @@
 #endif
 
 using namespace RAJA;
-#include "mynvtx.h"
+//#include "mynvtx.h"
 #ifdef CUDA_CODE
 // typedef NestedPolicy<ExecList<cuda_threadblock_x_exec<4>,cuda_threadblock_y_exec<4>,
 // 			      cuda_threadblock_z_exec<32>>>
@@ -22,9 +22,9 @@ using namespace RAJA;
 
 // typedef NestedPolicy<ExecList<cuda_threadblock_x_exec<32>,cuda_threadblock_y_exec<32>>>
 //   EXEC_BC2;
-typedef RAJA::cuda_exec<1024,true> FEXEC;
-
-using EXEC= RAJA::KernelPolicy<
+typedef RAJA::sycl_exec<256,false> FEXEC;
+//typedef RAJA::seq_exec FEXEC;
+/*using EXEC= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<512,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_x_loop,
 			  RAJA::statement::Tile<1, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_y_loop,
@@ -33,8 +33,32 @@ using EXEC= RAJA::KernelPolicy<
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_direct,
 														RAJA::statement::For<2, RAJA::cuda_thread_z_direct,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
+*/
+    using EXEC =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<4>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<16>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+/*
+  using EXEC =
+    RAJA::KernelPolicy<
+      RAJA::statement::For<0, RAJA::loop_exec,    // k
+        RAJA::statement::For<1, RAJA::loop_exec,  // j
+          RAJA::statement::For<2, RAJA::loop_exec,// i
+            RAJA::statement::Lambda<0>
+          >
+        >
+      >
+    >;
 
-using EXEC_BC= RAJA::KernelPolicy<
+/*using EXEC_BC= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<512,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_x_loop,
 			  RAJA::statement::Tile<1, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_y_loop,
@@ -43,21 +67,58 @@ using EXEC_BC= RAJA::KernelPolicy<
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_direct,
 														RAJA::statement::For<2, RAJA::cuda_thread_z_direct,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
+*/
+/*    using EXEC_BC =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<4>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<16>, // i
+                RAJA::statement::Lambda<0>
+              >
+            >
+          >
+        >
+      >;
+*/
+  using EXEC_BC = EXEC;
 
-using EXEC_BC2= RAJA::KernelPolicy<
+/*using EXEC_BC2= RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<1024,
     RAJA::statement::Tile<0, RAJA::statement::tile_fixed<32>, RAJA::cuda_block_x_loop,
 			  RAJA::statement::Tile<1, RAJA::statement::tile_fixed<32>, RAJA::cuda_block_y_loop,
 								      RAJA::statement::For<0, RAJA::cuda_thread_x_direct,
 											   RAJA::statement::For<1, RAJA::cuda_thread_y_direct,
 																     RAJA::statement::Lambda<0> >>>>>>;
-using CEXEC_BC = RAJA::KernelPolicy<
-  RAJA::statement::CudaKernel<
+*/
+    using EXEC_BC2 =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<16>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<16>,    // j
+              RAJA::statement::Lambda<0>
+            >
+          >
+        >
+      >;
+/*
+  using EXEC_BC2 =
+    RAJA::KernelPolicy<
+      RAJA::statement::For<0, RAJA::loop_exec,    // k
+        RAJA::statement::For<1, RAJA::loop_exec,  // j
+          RAJA::statement::Lambda<0>
+        >
+      >
+    >;
+  using CEXEC_BC = EXEC_BC2;
+/*using CEXEC_BC = RAJA::KernelPolicy<
+  RAJA::statement::SyclKernel<
     RAJA::statement::For<0, RAJA::seq_exec,
 			 RAJA::statement::For<1, RAJA::seq_exec,
 					      RAJA::statement::For<2, RAJA::seq_exec,
 								   RAJA::statement::Lambda<0> >>>>>;
-  
+*/
+
 // typedef NestedPolicy<ExecList<seq_exec, seq_exec, seq_exec>>
 //   CEXEC_BC;
 
@@ -68,7 +129,7 @@ using CEXEC_BC = RAJA::KernelPolicy<
 //   EXEC_FORT_PERM;
 
 // PERM TURNED OFF FOR NOW 
-using EXEC_FORT_PERM = RAJA::KernelPolicy<
+/*using EXEC_FORT_PERM = RAJA::KernelPolicy<
   RAJA::statement::CudaKernelFixed<256,
       RAJA::statement::Tile<0, RAJA::statement::tile_fixed<1>, RAJA::cuda_block_z_loop,
         RAJA::statement::Tile<1, RAJA::statement::tile_fixed<4>, RAJA::cuda_block_y_loop,
@@ -78,7 +139,35 @@ using EXEC_FORT_PERM = RAJA::KernelPolicy<
 				 RAJA::statement::For<2, RAJA::cuda_thread_x_loop,
 						      RAJA::statement::For<3, RAJA::seq_exec,
 									   RAJA::statement::Lambda<0> >>>>>>>>>;
-
+*/
+    using EXEC_FORT_PERM =
+      RAJA::KernelPolicy<
+        RAJA::statement::SyclKernel<
+          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_3<64>, // i
+                RAJA::statement::For<3, RAJA::seq_exec,
+                  RAJA::statement::Lambda<0>
+                >
+              >
+            >
+          >
+        >
+      >;
+/*
+  using EXEC_FORT_PERM =
+    RAJA::KernelPolicy<
+      RAJA::statement::For<0, RAJA::loop_exec,    // k
+        RAJA::statement::For<1, RAJA::loop_exec,  // j
+          RAJA::statement::For<2, RAJA::loop_exec,// i
+            RAJA::statement::For<3, RAJA::seq_exec,
+              RAJA::statement::Lambda<0>
+            >
+          >
+        >
+      >
+    >;
+*/
 #define SYNC_DEVICE //cudaDeviceSynchronize();
 #else
 
@@ -301,12 +390,12 @@ void EW::dpdmtfort( int ib, int ie, int jb, int je, int kb, int ke, const float_
    //SYNC_DEVICE
    // Code is slower with this RAJA loop due to the cost of copying data. Prefecth version is the fastest:: 2.70s on 20 procs. Without this loop it is around 2.4s
    // To fix. either port more loops to device or wait for the UM copies to reach 30GB/s
-   PUSH_RANGE("dpdmtfort",2);
+   //PUSH_RANGE("dpdmtfort",2);
    RAJA::forall< FEXEC> (RAJA::RangeSegment(0,3*npts),[=] RAJA_DEVICE(size_t i){
        //   for( size_t i = 0 ; i < 3*npts ; i++ )
       u2[i] = dt2i*(up[i]-2*u[i]+um[i]);
      });
-   POP_RANGE;
+   //POP_RANGE;
    //   if( m_corder )
    //   {
    //      for( size_t i=0 ; i < npts ; i++ )
@@ -751,7 +840,7 @@ void EW::bcfortsg_indrev( int ib, int ie, int jb, int je, int kb, int ke, int wi
 		   float_sw4 om, float_sw4 ph, float_sw4 cv,
 		   float_sw4* strx, float_sw4* stry )
 {
-  PUSH_RANGE("EW::bcfortsg_indrev",5);
+  //PUSH_RANGE("EW::bcfortsg_indrev",5);
    const float_sw4 d4a = 2.0/3.0;
    const float_sw4 d4b = -1.0/12.0;
    const size_t ni  = ie-ib+1;
@@ -767,12 +856,12 @@ void EW::bcfortsg_indrev( int ib, int ie, int jb, int je, int kb, int ke, int wi
      int ke = wind[5+6*s];
       if( bccnd[s]==1 || bccnd[s]==2 )
       {
-	PUSH_RANGE_PAYLOAD("bcfortsg_indrev_RAJA",4,s);
+	//PUSH_RANGE_PAYLOAD("bcfortsg_indrev_RAJA",4,s);
          size_t idel = 1+wind[1+6*s]-wind[6*s];
          size_t ijdel = idel * (1+wind[3+6*s]-wind[2+6*s]);
 	 if( s== 0 )
 	 {
-	   PUSH_RANGE("LOOP-0",0);
+	   //PUSH_RANGE("LOOP-0",0);
 	   RAJA::RangeSegment k_range(ks,ke+1);
 	   RAJA::RangeSegment j_range(js,je+1);
 	   RAJA::RangeSegment i_range(is,ie+1);
@@ -790,11 +879,11 @@ void EW::bcfortsg_indrev( int ib, int ie, int jb, int je, int kb, int ke, int wi
 					    u[ind+npts]   = bforce1[1+3*qq];
 					    u[ind+2*npts] = bforce1[2+3*qq];
 					  });
-	   SYNC_DEVICE;POP_RANGE;
+	   SYNC_DEVICE;//POP_RANGE;
 	 }
 	 else if( s== 1 )
 	 {
-	   PUSH_RANGE("LOOP-1",1);
+	   //PUSH_RANGE("LOOP-1",1);
 RAJA::RangeSegment k_range(ks,ke+1);
 	   RAJA::RangeSegment j_range(js,je+1);
 	   RAJA::RangeSegment i_range(is,ie+1);
@@ -813,7 +902,7 @@ RAJA::RangeSegment k_range(ks,ke+1);
 					    u[ind+2*npts] = bforce2[2+3*qq];
 		    
 					  });
-	   SYNC_DEVICE;POP_RANGE;
+	   SYNC_DEVICE;//POP_RANGE;
 	 }
 	 else if( s==2 )
 	 {
@@ -894,7 +983,7 @@ RAJA::RangeSegment k_range(ks,ke+1);
 					    u[ind+npts] = bforce6[1+3*qq];
 					    u[ind+2*npts] = bforce6[2+3*qq];
 					  });}
-	 POP_RANGE;
+	 //POP_RANGE;
       }
       else if( bccnd[s]==3 )
       {
@@ -1058,7 +1147,7 @@ RAJA::RangeSegment k_range(ks,ke+1);
       }
    }
    SYNC_DEVICE;
-   POP_RANGE;
+   //POP_RANGE;
 }
 
 //----------------------------------------------------------------------- 15%
@@ -1117,7 +1206,7 @@ void EW::addsgd4fort( int ifirst, int ilast, int jfirst, int jlast,
       // 				  [=] RAJA_DEVICE(int k, int j, int i,int c) {
 
 	       float_sw4 birho=beta/rho(i,j,k);
-#pragma unroll 
+//#pragma unroll 
 	       //for( int c=0 ; c < 3 ; c++ )
 	       {
 		  up(c,i,j,k) -= birho*( 
@@ -1690,7 +1779,7 @@ void EW::addsgd4cfort_indrev( int ifirst, int ilast, int jfirst, int jlast,
 			      float_sw4* __restrict__ a_jac, float_sw4* __restrict__ a_cox,
 			      float_sw4* __restrict__ a_coy, float_sw4 beta )
 {
-  PUSH_RANGE("addsgd4cfort_indrev",3);
+  //PUSH_RANGE("addsgd4cfort_indrev",3);
    if( beta != 0 )
    {
 #define rho(i,j,k) a_rho[(i-ifirst)+ni*(j-jfirst)+nij*(k-kfirst)]
@@ -1774,7 +1863,7 @@ void EW::addsgd4cfort_indrev( int ifirst, int ilast, int jfirst, int jlast,
 #undef coy
 #undef jac
    }
-   POP_RANGE;
+   //POP_RANGE;
 }
 
 //-----------------------------------------------------------------------
