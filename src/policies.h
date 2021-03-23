@@ -13,7 +13,7 @@ using EXEC_CARTBC = RAJA::KernelPolicy<
 														RAJA::statement::For<2, RAJA::cuda_thread_z_direct,
 																     RAJA::statement::Lambda<0> >>>>>>>>;
 */
-  /*  using EXEC_CARTBC =
+    using EXEC_CARTBC =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
           RAJA::statement::For<0, RAJA::sycl_global_1<16>,      // k
@@ -25,8 +25,8 @@ using EXEC_CARTBC = RAJA::KernelPolicy<
           >
         >
       >;
-*/
-  using EXEC_CARTBC =
+
+/*  using EXEC_CARTBC =
     RAJA::KernelPolicy<
       RAJA::statement::For<0, RAJA::loop_exec,    // k
         RAJA::statement::For<1, RAJA::loop_exec,  // j
@@ -36,10 +36,10 @@ using EXEC_CARTBC = RAJA::KernelPolicy<
         >
       >
     >;
-
+*/
 #define REDUCE_BLOCK_SIZE 256
 //typedef RAJA::seq_exec EXEC;
-typedef sycl_exec<REDUCE_BLOCK_SIZE> EXEC;
+typedef sycl_exec_nontrivial<REDUCE_BLOCK_SIZE> EXEC;
 using REDUCE_POLICY = RAJA::sycl_reduce;
 #define SYNC_DEVICE //cudaDeviceSynchronize();
 
