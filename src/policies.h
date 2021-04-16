@@ -38,9 +38,10 @@ using EXEC_CARTBC = RAJA::KernelPolicy<
     >;
 */
 #define REDUCE_BLOCK_SIZE 256
-//typedef RAJA::seq_exec EXEC;
-typedef sycl_exec_nontrivial<REDUCE_BLOCK_SIZE> EXEC;
-using REDUCE_POLICY = RAJA::sycl_reduce;
+typedef RAJA::seq_exec EXEC;
+//typedef sycl_exec_nontrivial<REDUCE_BLOCK_SIZE> EXEC;
+//using REDUCE_POLICY = RAJA::sycl_reduce;
+using REDUCE_POLICY = RAJA::seq_reduce;
 #define SYNC_DEVICE //cudaDeviceSynchronize();
 
 #else

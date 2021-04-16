@@ -23,9 +23,9 @@ void prefetch_to_device(const float_sw4 *ptr);
 #endif
 
 enum Space { Host, Managed,Device,Pinned,Managed_temps};
-void * operator new(std::size_t size,Space loc) throw(std::bad_alloc) ;
+void * operator new(std::size_t size,Space loc) noexcept(false) ; //throw(std::bad_alloc) ;
 void operator delete(void *ptr, Space loc) throw();
-void * operator new[](std::size_t size,Space loc) throw(std::bad_alloc) ;
+void * operator new[](std::size_t size,Space loc) noexcept(false) ; //throw(std::bad_alloc) ;
 void * operator new[](std::size_t size,Space loc,const char *file,int line);
 void operator delete[](void *ptr, Space loc) throw();
 void operator delete(void *ptr, Space loc,const char *file, int line) throw();

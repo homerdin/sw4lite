@@ -3,7 +3,7 @@
 
 cl::sycl::queue* QU::qu;
 
-void * operator new(std::size_t size,Space loc) throw(std::bad_alloc){
+void * operator new(std::size_t size,Space loc) noexcept(false) { // throw(std::bad_alloc){
 #ifdef CUDA_CODE
 if (loc==Managed){
   //std::cout<<"Managed allocation \n";
@@ -86,7 +86,7 @@ if (loc==Managed){
 }
 
 
-void * operator new(std::size_t size,Space loc,char *file, int line) throw(std::bad_alloc){
+void * operator new(std::size_t size,Space loc,char *file, int line) noexcept(false) { // throw(std::bad_alloc){
   // std::cout<<"Calling tracking new from "<<line<<" of "<<file<<"\n";
   // pattr_t *ss=new pattr_t;
   // ss->file=file;
@@ -98,7 +98,7 @@ void * operator new(std::size_t size,Space loc,char *file, int line) throw(std::
   return ret;
 }
 
-void * operator new[](std::size_t size,Space loc) throw(std::bad_alloc){
+void * operator new[](std::size_t size,Space loc) noexcept(false) { //throw(std::bad_alloc){
 #ifdef CUDA_CODE
   if (loc==Managed){
     //std::cout<<"Managed [] allocation \n";

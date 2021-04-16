@@ -61,9 +61,9 @@ else ifeq ($(findstring iris,$(HOSTNAME)),iris)
    CXX = mpic++
 #   CXX = mpiclang++
    RAJA_LOCATION = /home/bhomerding/install/raja.11.29.2020
-#   RAJA_LOCATION = /home/bhomerding/install/raja.2021-01-29
+#   RAJA_LOCATION = /home/bhomerding/install/raja.2021-03-22
 #   RAJA_LOCATION = /home/bhomerding/repo/EQSIM_work/upstream/RAJAPerf/tpl/RAJA
-   OPT = -g -O2 -std=c++11 -fvisibility-inlines-hidden  -finline-functions -finline-hint-functions -fsycl -fsycl-unnamed-lambda -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE 
+   OPT = -g -O2 -std=c++17 -fvisibility-inlines-hidden  -finline-functions -finline-hint-functions -fsycl -fsycl-unnamed-lambda -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE 
 # Gnu blas/lapack libraries:
 # #   EXTRA_LINK_FLAGS = -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-gfortran-4.8.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-gfortran-4.8.5/lib -lblas -lgfortran -lcudart -L$(CUDA_LIBS) -lnvToolsExt 
 # # xlf blas/lapack libraries:
@@ -75,9 +75,10 @@ else ifeq ($(findstring iris,$(HOSTNAME)),iris)
  else ifeq ($(findstring yarrow,$(HOSTNAME)),yarrow)
    FC  = mpiifort
    CXX = mpic++
-   RAJA_LOCATION = /home/bhomerding/install/raja_dpcpp
+#   RAJA_LOCATION = /home/bhomerding/install/raja_dpcpp
+   RAJA_LOCATION = /home/bhomerding/install/raja.11.29.2020
 #   RAJA_LOCATION = /home/bhomerding/repo/EQSIM_work/upstream/RAJAPerf/tpl/RAJA
-   OPT = -g -O2 -std=c++11   -fvisibility-inlines-hidden -finline-functions -finline-hint-functions -fsycl -fsycl-unnamed-lambda -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE
+   OPT = -g -O2 -std=c++17   -fvisibility-inlines-hidden -finline-functions -finline-hint-functions -fsycl -fsycl-unnamed-lambda -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE
 # Gnu blas/lapack libraries:
 # #   EXTRA_LINK_FLAGS = -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-gfortran-4.8.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-gfortran-4.8.5/lib -lblas -lgfortran -lcudart -L$(CUDA_LIBS) -lnvToolsExt 
 # # xlf blas/lapack libraries:
@@ -90,10 +91,12 @@ else ifeq ($(findstring iris,$(HOSTNAME)),iris)
 else ifeq ($(findstring arcticus,$(HOSTNAME)),arcticus)
    FC  = mpifort
    CXX = mpic++
-   RAJA_LOCATION = /home/bhomerding/install/raja_ats
+#   RAJA_LOCATION = /home/bhomerding/install/raja_ats
+   RAJA_LOCATION = /home/bhomerding/install/raja.11.29.2020
+#   RAJA_LOCATION = /home/bhomerding/install/raja.2021-03-22
 #   RAJA_LOCATION = /home/bhomerding/repo/EQSIM_work/upstream/RAJAPerf/tpl/RAJA
 # Gnu blas/lapack libraries:
-   OPT = -g -O2 -std=c++11 -fvisibility-inlines-hidden  -finline-functions  -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE
+   OPT = -g -O2 -std=c++17 -fvisibility-inlines-hidden  -finline-functions  -DRAJA03=1 -I$(RAJA_LOCATION)/include  -DSW4_CROUTINES  -DCUDA_CODE
 # #   EXTRA_LINK_FLAGS = -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-gfortran-4.8.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-gfortran-4.8.5/lib -lblas -lgfortran -lcudart -L$(CUDA_LIBS) -lnvToolsExt 
 # # xlf blas/lapack libraries:
 #   EXTRA_LINK_FLAGS = -O3 -lmpi_ibm -L/usr/tcetmp/packages/lapack/lapack-3.6.0-xlf-15.1.5/lib -llapack -L/usr/tcetmp/packages/blas/blas-3.6.0-xlf-15.1.5/lib -lblas -lcudart -L$(CUDA_LIBS) -lnvToolsExt /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlf90.so.1 /usr/tce/packages/xl/xl-beta-2017.11.28/lib/libxlfmath.so.1
