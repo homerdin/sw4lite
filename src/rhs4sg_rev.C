@@ -32,9 +32,9 @@ using namespace RAJA;
     using EXEC =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<4>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
-              RAJA::statement::For<2, RAJA::sycl_global_3<16>, // i
+          RAJA::statement::For<0, RAJA::sycl_global_0<4>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_2<16>, // i
                 RAJA::statement::Lambda<0>
               >
             >
@@ -46,9 +46,9 @@ using namespace RAJA;
     using BRIAN1 =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
-              RAJA::statement::For<2, RAJA::sycl_global_3<64>, // i
+          RAJA::statement::For<0, RAJA::sycl_global_0<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_2<16>, // i
                 RAJA::statement::Lambda<0>
               >
             >
@@ -58,9 +58,9 @@ using namespace RAJA;
     using BRIAN2 =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<64>,    // j
-              RAJA::statement::For<2, RAJA::sycl_global_3<4>, // i
+          RAJA::statement::For<0, RAJA::sycl_global_0<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<16>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_2<4>, // i
                 RAJA::statement::Lambda<0>
               >
             >
@@ -71,9 +71,9 @@ using namespace RAJA;
     using BRIAN3 =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
-              RAJA::statement::For<2, RAJA::sycl_global_3<64>, // i
+          RAJA::statement::For<0, RAJA::sycl_global_0<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_2<16>, // i
                 RAJA::statement::Lambda<0>
               >
             >

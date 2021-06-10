@@ -31,9 +31,9 @@ using EXEC= RAJA::KernelPolicy<
     using EXEC =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<16>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
-              RAJA::statement::For<2, RAJA::sycl_global_3<4>, // i
+          RAJA::statement::For<0, RAJA::sycl_global_0<16>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_2<4>, // i
                 RAJA::statement::Lambda<0>
               >
             >

@@ -37,9 +37,9 @@ typedef RAJA::sycl_exec<256,false> FEXEC;
     using EXEC =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<4>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
-              RAJA::statement::For<2, RAJA::sycl_global_3<16>, // i
+          RAJA::statement::For<0, RAJA::sycl_global_0<4>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_2<16>, // i
                 RAJA::statement::Lambda<0>
               >
             >
@@ -94,8 +94,8 @@ typedef RAJA::sycl_exec<256,false> FEXEC;
     using EXEC_BC2 =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<16>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<16>,    // j
+          RAJA::statement::For<0, RAJA::sycl_global_0<16>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<16>,    // j
               RAJA::statement::Lambda<0>
             >
           >
@@ -143,9 +143,9 @@ typedef RAJA::sycl_exec<256,false> FEXEC;
     using EXEC_FORT_PERM =
       RAJA::KernelPolicy<
         RAJA::statement::SyclKernel<
-          RAJA::statement::For<0, RAJA::sycl_global_1<1>,      // k
-            RAJA::statement::For<1, RAJA::sycl_global_2<4>,    // j
-              RAJA::statement::For<2, RAJA::sycl_global_3<64>, // i
+          RAJA::statement::For<0, RAJA::sycl_global_0<1>,      // k
+            RAJA::statement::For<1, RAJA::sycl_global_1<4>,    // j
+              RAJA::statement::For<2, RAJA::sycl_global_2<64>, // i
                 RAJA::statement::For<3, RAJA::seq_exec,
                   RAJA::statement::Lambda<0>
                 >

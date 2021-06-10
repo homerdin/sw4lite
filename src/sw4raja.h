@@ -12,6 +12,7 @@ using namespace RAJA;
 class QU {
   public:
     static cl::sycl::queue* qu;
+    static camp::resources::Resource sycl_res;
 };
 #define RAJA_HOST_DEVICE SYCL_EXTERNAL
 //#include "cuda_runtime.h"

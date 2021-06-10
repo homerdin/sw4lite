@@ -34,7 +34,7 @@
 #include "policies.h"
 #include <chrono>
 #include <thread>
-
+camp::resources::Resource QU::sycl_res{camp::resources::Sycl()};
 void PrintPointerAttributes(void *ptr);
 #ifdef CUDA_CODE
 bool IsManaged(void *ptr);
@@ -191,8 +191,10 @@ EW::EW( const string& filename ) :
 
 #ifdef CUDA_CODE
 //feenableexcept(FE_INVALID | FE_OVERFLOW);
-   QU::qu = new cl::sycl::queue();
-   RAJA::sycl::detail::setQueue(QU::qu);
+//   QU::qu = new cl::sycl::queue();
+  // RAJA::sycl::detail::setQueue(QU::qu);
+   QU::qu = QU::sycl_res.get<camp::resources::Sycl>().get_queue();
+   RAJA::sycl::detail::setQueue(&QU::sycl_res);
    m_iop = newmanaged(5+5+24+5+384+24+48+6+4);
    auto e = QU::qu->memset(m_iop,0,sizeof(float_sw4)*(5+5+24+5+384+24+48+6+4));
    e.wait();
